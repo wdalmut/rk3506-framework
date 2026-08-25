@@ -6,11 +6,11 @@
 // gira davvero?". Per farlo legge quattro cose che, messe insieme, coprono
 // i punti dove un porting fallisce in silenzio:
 //
-//   /proc/device-tree/model  il DTB caricato e' quello giusto?
-//   /proc/uptime             il kernel e' arrivato allo userspace?
-//   /proc/meminfo            il blob DDR ha inizializzato la RAM come previsto?
-//   /proc/mtd                le partizioni da mtdparts= combaciano con
-//                            parameter.txt?
+//	/proc/device-tree/model  il DTB caricato e' quello giusto?
+//	/proc/uptime             il kernel e' arrivato allo userspace?
+//	/proc/meminfo            il blob DDR ha inizializzato la RAM come previsto?
+//	/proc/mtd                le partizioni da mtdparts= combaciano con
+//	                         parameter.txt?
 //
 // Cross-compilata per ARMv7 hard-float con CGO_ENABLED=0: solo stdlib,
 // nessuna dipendenza dalla libc del target.
@@ -52,8 +52,12 @@ func banner() {
 	fmt.Println()
 	fmt.Println(line)
 	fmt.Printf("  hello-lyra %s — Luckfox Lyra Plus (RK3506G2)\n", version)
-	fmt.Printf("  Buildroot upstream + external tree · %s\n",
-		time.Now().Format("2006-01-02 15:04:05"))
+	now := time.Now()
+	clock := now.Format("2006-01-02 15:04:05")
+	if now.Year() < 2000 {
+		clock += "  (orologio non impostato: niente RTC ne' NTP)"
+	}
+	fmt.Printf("  Buildroot upstream + external tree · %s\n", clock)
 	fmt.Println(line)
 }
 
@@ -116,7 +120,8 @@ func uptime() string {
 // MemAvailable e' la stima del kernel di quanto e' allocabile senza
 // swappare: piu' onesta di MemFree su un sistema con page cache.
 func memory() [][2]string {
-	want := []string{"MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached"}
+	want := []string{"MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached",
+		"CmaTotal", "CmaFree"}
 	found := map[string]string{}
 
 	f, err := os.Open("/proc/meminfo")
@@ -171,10 +176,12 @@ func mtd() {
 	}
 	defer f.Close()
 
-	fmt.Printf("    %-8s %-12s %-12s %s\n", "dev", "size", "erasesize", "name")
+	fmt.Printf("    %-8s %-14s %-10s %-10s %s\n",
+		"dev", "size", "raw", "erasesize", "name")
 
 	sc := bufio.NewScanner(f)
 	n := 0
+	var total uint64
 	for sc.Scan() {
 		line := sc.Text()
 		if strings.HasPrefix(line, "dev:") { // intestazione
@@ -189,28 +196,38 @@ func mtd() {
 		if len(fields) < 3 {
 			continue
 		}
-		size := parseHexBytes(fields[0])
-		erase := parseHexBytes(fields[1])
+		size, raw := parseHexBytes(fields[0])
+		erase, _ := parseHexBytes(fields[1])
 		name := strings.Trim(strings.Join(fields[2:], " "), "\"")
-		fmt.Printf("    %-8s %-12s %-12s %s\n", dev, size, erase, name)
+		fmt.Printf("    %-8s %-14s %-10s %-10s %s\n",
+			dev, size, "0x"+fields[0], erase, name)
+		total += raw
 		n++
 	}
 	if n == 0 {
 		fmt.Println("    nessuna partizione MTD: mtdparts= assente dal bootargs?")
+		return
 	}
+	// La somma piu' l'offset della prima partizione deve dare la dimensione
+	// del chip. Se non torna, mtdparts non copre tutta la flash.
+	fmt.Printf("\n    totale dichiarato in mtdparts: %.3f MiB\n",
+		float64(total)/(1<<20))
 }
 
-func parseHexBytes(s string) string {
+// parseHexBytes non arrotonda: su una partizione "grow" la differenza fra
+// 223.000 e 223.375 MiB dice se il conto con parameter.txt torna, e un
+// "%.0f" la nasconderebbe. Restituisce anche il valore grezzo.
+func parseHexBytes(s string) (string, uint64) {
 	v, err := strconv.ParseUint(s, 16, 64)
 	if err != nil {
-		return s
+		return s, 0
 	}
 	switch {
 	case v >= 1<<20:
-		return fmt.Sprintf("%.0f MiB", float64(v)/(1<<20))
+		return fmt.Sprintf("%.3f MiB", float64(v)/(1<<20)), v
 	case v >= 1<<10:
-		return fmt.Sprintf("%.0f KiB", float64(v)/(1<<10))
+		return fmt.Sprintf("%.0f KiB", float64(v)/(1<<10)), v
 	default:
-		return fmt.Sprintf("%d B", v)
+		return fmt.Sprintf("%d B", v), v
 	}
 }

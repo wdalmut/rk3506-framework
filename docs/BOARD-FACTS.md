@@ -788,8 +788,8 @@ ciò che serve è presente in upstream a quel livello:
 | ~~**2**~~ | ✅ **Risolto** | Gli SHA pinnati sono la tip del branch `luckfox-linux-6.1-rk3506` su entrambi i mirror, quindi raggiungibili da un ref. | — | Resta consigliato pushare anche i tag `vendor-*`: se un domani il branch si sposta, il pin sopravvive solo grazie al tag. |
 | ~~**3**~~ | ✅ **Risolto** | Il blob DDR arriva da un path configurabile (`BR2_LYRA_RKBIN_DIR`), non è copiato nel repo, e `post-image.sh` ne verifica lo sha256 contro `board/lyra-plus/rkbin.sha256` fermandosi se non combacia. | — | Verificato in entrambi i versi: passa sul rkbin buono, fallisce su un hash alterato. |
 | **4** | 🟠 Alta | `TODO(verify):` per **SPI NAND**, a quale offset il BootROM RK3506 si aspetta l'IDB/loader? Accertato solo che i primi 4 MiB sono riservati (nessuna partizione in `parameter.txt`) e che per SD/eMMC è il settore 64. | Serve per documentare il flash manuale e per validare che `post-image.sh` produca un layout scrivibile. | Leggere `docs/{cn,en}/Linux/ApplicationNote/Rockchip_Developer_Guide_Linux_Flash_Open_Source_Solution_*.pdf` (presenti in `$SDK/docs/`), o dumpare la NAND di una board già funzionante. |
-| **5** | 🟡 Media | `TODO(verify):` la SPI NAND è davvero da **256 MiB**, con page 2048 B e blocco 128 KiB? | Determina la dimensione reale di `rootfs` (`-@…:grow`) e la validità di LEB/PEB/min-I/O usati da `mkfs.ubifs`/`ubinize`. Se sbagliati il rootfs non monta. | `cat /proc/mtd` e `dmesg | grep -i nand` su board funzionante. Indizio forte a favore di 256 MiB: il `parameter.txt` locale piazza `amp` a `0x7f300` (254.625 MiB). |
-| **6** | 🟡 Media | `TODO(verify):` la console seriale è fisicamente su UART0 (SoC) o sul connettore serigrafato "UART2"? | Non blocca il boot ma se il cavo va sul pettine sbagliato non si vede nulla e sembra un boot fallito. | Il DTS è inequivoco (`rockchip,serial-id = <0>` → `0xff0a0000`); resta da mappare quale header della Lyra Plus porta quei pin. Verificare su schematico o provando a 1500000 8N1. |
+| **5** | 🟡 Media | **Parzialmente risolto dal boot reale.** Confermato: `erasesize` = **128 KiB** su tutte le partizioni, `uboot` = 4 MiB e `boot` = 12 MiB esatti come in `parameter.txt`. `TODO(verify):` resta la dimensione totale del chip. `rootfs` risulta **223 MiB**, non i 224 attesi da `-@0x10000` su 256 MiB: manca 1 MiB e non e' chiaro dove vada. | Solo la geometria UBI, gia' confermata corretta dal fatto che il rootfs monta. | Rilanciare `hello-lyra` dopo questo commit: ora stampa le dimensioni MTD a tre decimali e in esadecimale, piu' il totale, invece di arrotondare. |
+| ~~**6**~~ | ✅ **Risolto** | La console e' su UART0 come dice il DTS: la board risponde su `ttyFIQ0` a 1500000 8N1 e `hello-lyra` stampa dalla seriale. Il DTB caricato e' quello giusto — `/proc/device-tree/model` riporta `Luckfox Lyra Plus`. | — | La serigrafia "UART2" nello `flash.sh` dell'SDK era fuorviante. |
 | **7** | 🟢 Bassa | `TODO(verify):` quanti commit di divergenza ha il Buildroot dell'SDK rispetto a `2024.02`? | Solo documentale: la decisione (non riportare nulla) è già presa sulla base della diff ad albero. | Impossibile in locale (`depth=1`). Serve un clone completo dal remote di TODO-1. |
 | **8** | 🟢 Bassa | ~~Replicare l'AMP locale?~~ **DECISO: no.** La Fase 2 usa il baseline vendor: solo Linux, partizioni `uboot`/`boot`/`rootfs`. | — | Se servirà, il delta è documentato in §0 e §1b di questo file. |
 | ~~**9**~~ | ✅ **Risolto** | U-Boot 2017.09 non compilava con GCC 13. Enumerando la coda in una passata con `KCFLAGS=-Wno-error` sono emerse tre sole classi di warning. | — | Quattro patch numerate in `external/board/lyra-plus/patches/uboot/`: due falsi positivi `maybe-uninitialized`, una divergenza reale dichiarazione/definizione (`cmd_process`), un bug vero di lettura fuori array (`bmp2gray16`). |
@@ -1002,3 +1002,55 @@ BUILD EXIT=0
 omologhi prodotti dall'SDK; `boot.img` ha la stessa struttura FIT
 (`fdt`/`kernel`/`resource`, `multi=resource`) e `rootfs.img` la stessa
 geometria UBI (`vid_hdr_offset=2048`, `data_offset=4096`).
+
+---
+
+## Misure dal primo boot su hardware
+
+Output di `hello-lyra` sulla seriale, board che parte da SPI NAND.
+
+### Confermato
+
+| Dato | Valore misurato | Cosa conferma |
+|------|-----------------|---------------|
+| `/proc/device-tree/model` | `Luckfox Lyra Plus` | il DTB dentro `boot.img` è quello giusto: `BR2_LINUX_KERNEL_INTREE_DTS_NAME` corretto |
+| kernel | `6.1.99` | il mirror `rk3506-kernel` serve il commit atteso |
+| `mtd0 uboot` | 4 MiB, erase 128 KiB | combacia con `parameter.txt` (`0x2000` settori) |
+| `mtd1 boot` | 12 MiB, erase 128 KiB | combacia con `parameter.txt` (`0x6000` settori) |
+| `mtd2 rootfs` | 223 MiB, erase 128 KiB | monta e il sistema parte |
+| `erasesize` | **128 KiB** ovunque | `BR2_TARGET_ROOTFS_UBI_PEBSIZE=0x20000` è giusto — era l'assunzione più rischiosa di tutto il porting |
+| console | `ttyFIQ0`, 1500000 8N1 | chiude TODO-6 |
+
+L'`erasesize` è il riscontro che conta di più: LEB, PEB e min-I/O erano stati
+dedotti dai default di `mk-image.sh` dell'SDK, non misurati. Se il blocco
+fosse stato da 256 KiB il rootfs non avrebbe montato.
+
+### Due cose che non tornano
+
+**1. `rootfs` è 223 MiB, non 224.** Con `-@0x10000(rootfs:grow)` la partizione
+parte a 32 MiB e prende il resto; su un chip da 256 MiB dovrebbero essere 224.
+Manca 1 MiB. Vedi TODO-5: `hello-lyra` ora stampa le dimensioni a tre decimali
+e in esadecimale, più la somma, cosa che l'arrotondamento a `%.0f` nascondeva.
+
+**2. `MemTotal` = 89 216 kB (87,1 MiB), che è poco.** Il DTS di board fa:
+
+```
+/**********display**********/
+&cma {
+        size = <0x2000000>;     /* 32 MiB */
+};
+```
+
+mentre il default nel dtsi è `size = <0x0>`. Quindi il DTS vendor riserva
+**32 MiB di CMA per il VOP** — e questo albero il display non lo costruisce
+(`linux.config` non applica `rk3506-display.config`).
+
+Attenzione a non concludere troppo in fretta: una regione CMA `reusable` di
+norma **è** contata dentro `MemTotal`, quindi non è automatico che quei 32 MiB
+spieghino il numero basso. Per questo `hello-lyra` ora riporta anche
+`CmaTotal` e `CmaFree`: se `CmaTotal` è 32 MiB e `MemTotal` li include, il
+sospetto cade; se `CmaTotal` è 0, la memoria è stata tolta prima e conviene
+azzerare `&cma` in un DTS di board nostro.
+
+`TODO(verify):` quanta DDR monta davvero questa Lyra Plus, e quanto ne
+recuperiamo azzerando il CMA che non usiamo.

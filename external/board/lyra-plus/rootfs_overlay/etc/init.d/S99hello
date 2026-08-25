@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# S99hello — lancia hello-lyra all'avvio.
+#
+# Installato dall'overlay (BR2_ROOTFS_OVERLAY), non dal package: il package
+# hello-lyra installa solo /usr/bin/hello-lyra, cosi' resta riusabile senza
+# trascinarsi dietro una policy di avvio.
+#
+# BusyBox init esegue /etc/init.d/rcS, che chiama in ordine gli S??* con
+# argomento "start". L'output va sulla console (/dev/console = ttyFIQ0),
+# quindi il banner si vede sulla seriale durante il boot.
+
+case "$1" in
+	start)
+		/usr/bin/hello-lyra
+		;;
+	stop)
+		;;
+	restart|reload)
+		"$0" start
+		;;
+	*)
+		echo "Uso: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

@@ -1,0 +1,56 @@
+menu "Luckfox Lyra Plus (RK3506G2)"
+
+comment "Dipendenze binarie vendor"
+
+config BR2_LYRA_RKBIN_DIR
+	string "percorso del checkout rkbin"
+	default "/sdk/rkbin"
+	help
+	  Percorso di un checkout del repository Rockchip 'rkbin'.
+
+	  Da qui vengono presi blob e tool che NON sono ricompilabili dai
+	  sorgenti e che quindi non vivono in questo repository:
+
+	    bin/rk35/rk3506_ddr_750MHz_v1.04.bin   init DDR (CODE471 + FlashData)
+	    bin/rk35/rk3506_usbplug_v1.02.bin      CODE472
+	    bin/rk35/rk3506_tee_v1.25.bin          OP-TEE
+	    tools/boot_merger                      assembla MiniLoaderAll.bin
+	    tools/mkimage                          genera i FIT
+	    RKBOOT/RK3506MINIALL.ini               descrittore loader
+	    RKTRUST/RK3506TOS.ini                  descrittore OP-TEE
+
+	  Revisione attesa (dal manifest dell'SDK Luckfox v1.4):
+	    tag  linux-6.1-stan-rkr4.2
+	    sha  32ccaf811ae70ce050aa810869c63c2b34324d59
+
+	  post-image.sh verifica lo sha256 dei blob contro
+	  board/lyra-plus/rkbin.sha256 e si ferma se non corrispondono.
+	  Per sbloccare volontariamente: LYRA_ALLOW_RKBIN_MISMATCH=1.
+
+	  ATTENZIONE: 'u-boot/make.sh' pretende rkbin come directory
+	  fratello (controlla '../rkbin' e aborta se manca), e la catena ci
+	  scrive dentro (spl.sh crea una dir 'tmp' nella radice di rkbin).
+	  post-image.sh ne fa quindi una COPIA di lavoro in
+	  $(BUILD_DIR)/rkbin: il checkout puntato qui resta intatto e puo'
+	  essere montato read-only.
+
+config BR2_LYRA_PACKTOOL_DIR
+	string "percorso dei tool Rockchip di packaging (afptool, rkImageMaker)"
+	default "/sdk/tools/linux/Linux_Pack_Firmware/rockdev"
+	help
+	  Directory che contiene 'afptool' e 'rkImageMaker', usati per
+	  produrre update.img. Nell'SDK Luckfox e':
+	    tools/linux/Linux_Pack_Firmware/rockdev
+
+	  Non stanno in rkbin: sono nel repository 'tools' dell'SDK.
+
+	  Se lasciato vuoto, o se i due binari non sono presenti,
+	  post-image.sh SALTA update.img con un avviso esplicito e
+	  produce comunque tutti gli altri artefatti. Le immagini per
+	  partizione restano flashabili singolarmente con rkdeveloptool.
+
+comment "Applicazioni"
+
+source "$BR2_EXTERNAL_LYRA_PLUS_PATH/package/hello-lyra/Config.in"
+
+endmenu

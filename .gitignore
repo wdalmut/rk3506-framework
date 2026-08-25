@@ -1,0 +1,10 @@
+# Output di Buildroot: toolchain, sorgenti scaricati, immagini.
+/output/
+
+# NOTA: build-trace.log e build-trace-pack.log NON sono ignorati.
+# Sono i trace di `env SHELLOPTS=xtrace bash ./build.sh` sull'SDK Luckfox da
+# cui e' stata ricostruita la catena di packaging, e docs/BOARD-FACTS.md li
+# cita per numero di riga (es. "build-trace.log:4056"). Ignorarli
+# trasformerebbe quelle citazioni in riferimenti morti. Sono ~450 KB e vanno
+# considerati prova congelata: se rigeneri i trace, i numeri di riga nei
+# documenti vanno riverificati.

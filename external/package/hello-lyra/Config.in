@@ -1,0 +1,22 @@
+config BR2_PACKAGE_HELLO_LYRA
+	bool "hello-lyra"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	help
+	  Applicazione di verifica per Luckfox Lyra Plus (RK3506G2).
+
+	  Stampa un banner e legge dal sistema quattro cose che dicono se il
+	  porting ha funzionato davvero:
+	    - modello board da /proc/device-tree/model
+	    - uptime da /proc/uptime
+	    - memoria da /proc/meminfo
+	    - partizioni MTD da /proc/mtd
+
+	  Scritta in Go, cross-compilata per ARMv7 (GOARCH=arm GOARM=7,
+	  entrambi dedotti da Buildroot) con CGO_ENABLED=0: il binario e'
+	  statico e non dipende dalla libc del rootfs.
+
+	  Avviata al boot da /etc/init.d/S99hello, installato dall'overlay
+	  di board.
+
+comment "hello-lyra richiede una architettura supportata da Go"
+	depends on !BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS

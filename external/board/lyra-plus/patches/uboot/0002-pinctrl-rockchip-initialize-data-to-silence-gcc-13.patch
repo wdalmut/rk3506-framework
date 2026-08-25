@@ -1,0 +1,68 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 2/2] pinctrl: rockchip: initialize data to silence gcc >= 13
+
+Stessa classe di falso positivo della patch 0001, in quattro punti:
+
+  drivers/pinctrl/rockchip/pinctrl-rockchip-core.c:60  'data'
+  drivers/pinctrl/rockchip/pinctrl-rockchip-core.c:85  'data'
+  drivers/pinctrl/pinctrl-rockchip.c:847               'data'
+  drivers/pinctrl/pinctrl-rockchip.c:1580              'data'
+
+Schema comune, in rockchip_get_recalced_mux() e rockchip_get_mux_route():
+
+    for (i = 0; i < ctrl->niomux_recalced; i++) {
+            data = &ctrl->iomux_recalced[i];
+            ...
+    }
+    if (i >= ctrl->niomux_recalced)
+            return;          /* qui 'data' non e' stata assegnata... */
+    *reg = data->reg;        /* ...ma non ci si arriva mai */
+
+Se il contatore e' zero il ciclo non gira e 'data' resta non
+inizializzata, ma in quel caso la guardia successiva ritorna prima di
+dereferenziarla. gcc 13 vede solo il percorso teorico.
+
+Inizializzare a NULL non cambia il comportamento e, se un giorno la
+guardia venisse rimossa per errore, trasforma una lettura di memoria
+casuale in un NULL deref, cioe' in un crash diagnosticabile.
+
+--- a/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c	2026-08-24 15:32:04.507363845 +0200
++++ b/drivers/pinctrl/rockchip/pinctrl-rockchip-core.c	2026-08-24 15:32:04.514571340 +0200
+@@ -42,7 +42,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_recalced_data *data;
++	struct rockchip_mux_recalced_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_recalced; i++) {
+@@ -66,7 +66,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_route_data *data;
++	struct rockchip_mux_route_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_routes; i++) {
+--- a/drivers/pinctrl/pinctrl-rockchip.c	2026-08-24 15:32:04.510776134 +0200
++++ b/drivers/pinctrl/pinctrl-rockchip.c	2026-08-24 15:32:04.515573215 +0200
+@@ -829,7 +829,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_recalced_data *data;
++	struct rockchip_mux_recalced_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_recalced; i++) {
+@@ -1561,7 +1561,7 @@
+ {
+ 	struct rockchip_pinctrl_priv *priv = bank->priv;
+ 	struct rockchip_pin_ctrl *ctrl = priv->ctrl;
+-	struct rockchip_mux_route_data *data;
++	struct rockchip_mux_route_data *data = NULL;
+ 	int i;
+ 
+ 	for (i = 0; i < ctrl->niomux_routes; i++) {

@@ -1,0 +1,35 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 3/4] command: match cmd_process() prototype to its definition
+
+gcc 13 ha introdotto -Wenum-int-mismatch, che il BSP promuove a errore:
+
+  common/command.c:504:20: error: conflicting types for 'cmd_process' due
+      to enum/integer mismatch; have 'enum command_ret_t(...)'
+      [-Werror=enum-int-mismatch]
+  include/command.h:142:5: note: previous declaration with type 'int(...)'
+
+Non e' un falso positivo: la dichiarazione e la definizione divergono
+davvero. common/command.c definisce cmd_process() come
+'enum command_ret_t', mentre include/command.h la dichiara 'int'. Finora
+passava perche' gcc < 13 non segnalava il caso, e su ARM EABI un enum di
+quelle dimensioni ha la stessa rappresentazione di int.
+
+Si allinea la dichiarazione alla definizione, non il contrario: i
+chiamanti confrontano il risultato con CMD_RET_SUCCESS / CMD_RET_FAILURE,
+quindi il tipo giusto e' l'enum. 'enum command_ret_t' e' gia' definito a
+riga 122 dello stesso header, quindi e' visibile nel punto di
+dichiarazione.
+
+Nessun cambio di ABI su questa piattaforma.
+
+--- a/include/command.h	2026-08-24 15:38:26.974034551 +0200
++++ b/include/command.h	2026-08-24 15:38:26.990357957 +0200
+@@ -139,7 +139,7 @@
+  *			number of ticks the command took to complete.
+  * @return 0 if the command succeeded, 1 if it failed
+  */
+-int cmd_process(int flag, int argc, char * const argv[],
++enum command_ret_t cmd_process(int flag, int argc, char * const argv[],
+ 			       int *repeatable, unsigned long *ticks);
+ 
+ void fixup_cmdtable(cmd_tbl_t *cmdtp, int size);

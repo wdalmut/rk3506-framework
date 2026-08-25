@@ -1,0 +1,3260 @@
++ '[' -z ./build.sh ']'
++ set -a
++ set +a
++ '[' ./build.sh '!=' ./build.sh ']'
++ '[' ./build.sh == ./build.sh ']'
++ main firmware updateimg
++ case "$@" in
++ '[' -z '' ']'
++ trap err_handler ERR
++ set -eE
++ unset INITIAL_SESSION
+++ mktemp -u
++ INITIAL_ENV=/tmp/tmp.gqxZU1sydQ
++ env
++ '[' '' ']'
++ INITIAL_SESSION=1
++ setup_environments
++ export LC_ALL=C
++ LC_ALL=C
++++ realpath ./build.sh
+++ dirname /sdk/device/rockchip/common/scripts/build.sh
++ export RK_SCRIPTS_DIR=/sdk/device/rockchip/common/scripts
++ RK_SCRIPTS_DIR=/sdk/device/rockchip/common/scripts
+++ realpath /sdk/device/rockchip/common/scripts/..
++ export RK_COMMON_DIR=/sdk/device/rockchip/common
++ RK_COMMON_DIR=/sdk/device/rockchip/common
+++ realpath /sdk/device/rockchip/common/../../..
++ export RK_SDK_DIR=/sdk
++ RK_SDK_DIR=/sdk
++ export RK_DEVICE_DIR=/sdk/device/rockchip
++ RK_DEVICE_DIR=/sdk/device/rockchip
++ export RK_CHIPS_DIR=/sdk/device/rockchip/.chips
++ RK_CHIPS_DIR=/sdk/device/rockchip/.chips
++ export RK_CHIP_DIR=/sdk/device/rockchip/.chip
++ RK_CHIP_DIR=/sdk/device/rockchip/.chip
++ export RK_CUSTOM_OVERLAY_DIR=/sdk/device/rockchip/common/overlays/rootfs/custom/root
++ RK_CUSTOM_OVERLAY_DIR=/sdk/device/rockchip/common/overlays/rootfs/custom/root
++ export RK_DEFAULT_TARGET=all
++ RK_DEFAULT_TARGET=all
++ export RK_DATA_DIR=/sdk/device/rockchip/common/data
++ RK_DATA_DIR=/sdk/device/rockchip/common/data
++ export RK_TOOLS_DIR=/sdk/device/rockchip/common/tools
++ RK_TOOLS_DIR=/sdk/device/rockchip/common/tools
++ export RK_EXTRA_PARTS_DIR=/sdk/device/rockchip/common/extra-parts
++ RK_EXTRA_PARTS_DIR=/sdk/device/rockchip/common/extra-parts
++ export RK_KBUILD_DIR=/sdk/device/rockchip/common/linux-kbuild
++ RK_KBUILD_DIR=/sdk/device/rockchip/common/linux-kbuild
++ export RK_CONFIG_IN=/sdk/device/rockchip/common/configs/Config.in
++ RK_CONFIG_IN=/sdk/device/rockchip/common/configs/Config.in
++ export RK_BUILD_HOOK_DIR=/sdk/device/rockchip/common/build-hooks
++ RK_BUILD_HOOK_DIR=/sdk/device/rockchip/common/build-hooks
++ export RK_BUILD_HELPER=/sdk/device/rockchip/common/build-hooks/build-helper
++ RK_BUILD_HELPER=/sdk/device/rockchip/common/build-hooks/build-helper
++ export RK_POST_HOOK_DIR=/sdk/device/rockchip/common/post-hooks
++ RK_POST_HOOK_DIR=/sdk/device/rockchip/common/post-hooks
++ export RK_POST_HELPER=/sdk/device/rockchip/common/post-hooks/post-helper
++ RK_POST_HELPER=/sdk/device/rockchip/common/post-hooks/post-helper
++ export RK_PARTITION_HELPER=/sdk/device/rockchip/common/scripts/partition-helper
++ RK_PARTITION_HELPER=/sdk/device/rockchip/common/scripts/partition-helper
++ export RK_OUTDIR=/sdk/output
++ RK_OUTDIR=/sdk/output
++ export RK_EXTRA_PART_OUTDIR=/sdk/output/extra-parts
++ RK_EXTRA_PART_OUTDIR=/sdk/output/extra-parts
++ export RK_SESSION_DIR=/sdk/output/sessions
++ RK_SESSION_DIR=/sdk/output/sessions
+++ date +%F_%H-%M-%S
++ export RK_SESSION=2026-08-24_08-51-41
++ RK_SESSION=2026-08-24_08-51-41
++ export RK_LOG_DIR=/sdk/output/sessions/2026-08-24_08-51-41
++ RK_LOG_DIR=/sdk/output/sessions/2026-08-24_08-51-41
++ export RK_LOG_BASE_DIR=/sdk/output/log
++ RK_LOG_BASE_DIR=/sdk/output/log
++ export RK_ROCKDEV_DIR=/sdk/rockdev
++ RK_ROCKDEV_DIR=/sdk/rockdev
++ export RK_FIRMWARE_DIR=/sdk/output/firmware
++ RK_FIRMWARE_DIR=/sdk/output/firmware
++ export RK_CONFIG=/sdk/output/.config
++ RK_CONFIG=/sdk/output/.config
++ export RK_DEFCONFIG_LINK=/sdk/output/defconfig
++ RK_DEFCONFIG_LINK=/sdk/output/defconfig
+++ stat --format %U /sdk
++ export RK_OWNER=builder
++ RK_OWNER=builder
+++ stat --format %u /sdk
++ export RK_OWNER_UID=1000
++ RK_OWNER_UID=1000
++ RK_PARSED_CMDS=/sdk/output/.parsed_cmds
++ RK_MAKE_USAGE=/sdk/output/.make_usage
++ MANIFEST=/sdk/.repo/manifest.xml
++ '[' -e /sdk/.repo/manifest.xml ']'
++ '[' '!' -L /sdk/.repo/manifest.xml ']'
+++ grep -o 'linux-.*-gen-rkr[^."]*' /sdk/.repo/manifest.xml
+++ head -n 1
++ TAG=
++++ realpath /sdk/.repo/manifest.xml
+++ basename /sdk/.repo/manifests/release/luckfox_linux6.1_rk3506_release_v1.4_20250620.xml
++ MANIFEST=luckfox_linux6.1_rk3506_release_v1.4_20250620.xml
++ notice '\n############### Rockchip Linux SDK ###############\n'
++ rk_log 35 '\n############### Rockchip Linux SDK ###############\n'
++ LOG_COLOR=35
++ shift
++ '[' '\n############### Rockchip Linux SDK ###############\n' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35m\n############### Rockchip Linux SDK ###############\n\e[0m'
+[35m
+############### Rockchip Linux SDK ###############
+[0m
++ notice 'Manifest: luckfox_linux6.1_rk3506_release_v1.4_20250620.xml'
++ rk_log 35 'Manifest: luckfox_linux6.1_rk3506_release_v1.4_20250620.xml'
++ LOG_COLOR=35
++ shift
++ '[' 'Manifest: luckfox_linux6.1_rk3506_release_v1.4_20250620.xml' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mManifest: luckfox_linux6.1_rk3506_release_v1.4_20250620.xml\e[0m'
+[35mManifest: luckfox_linux6.1_rk3506_release_v1.4_20250620.xml[0m
++ '[' '' ']'
++ echo
+
++ notice -n 'Log colors: '
++ rk_log 35 -n 'Log colors: '
++ LOG_COLOR=35
++ shift
++ '[' -n = -n ']'
++ shift
++ LOG_FLAG=-ne
++ echo -ne '\e[35mLog colors: \e[0m'
+[35mLog colors: [0m+ message -n 'message '
++ rk_log 36 -n 'message '
++ LOG_COLOR=36
++ shift
++ '[' -n = -n ']'
++ shift
++ LOG_FLAG=-ne
++ echo -ne '\e[36mmessage \e[0m'
+[36mmessage [0m+ notice -n 'notice '
++ rk_log 35 -n 'notice '
++ LOG_COLOR=35
++ shift
++ '[' -n = -n ']'
++ shift
++ LOG_FLAG=-ne
++ echo -ne '\e[35mnotice \e[0m'
+[35mnotice [0m+ warning -n 'warning '
++ rk_log 34 -n 'warning '
++ LOG_COLOR=34
++ shift
++ '[' -n = -n ']'
++ shift
++ LOG_FLAG=-ne
++ echo -ne '\e[34mwarning \e[0m'
+[34mwarning [0m+ error -n 'error '
++ rk_log 91 -n 'error '
++ LOG_COLOR=91
++ shift
++ '[' -n = -n ']'
++ shift
++ LOG_FLAG=-ne
++ echo -ne '\e[91merror \e[0m'
+[91merror [0m+ fatal fatal
++ rk_log 31 fatal
++ LOG_COLOR=31
++ shift
++ '[' fatal = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[31mfatal\e[0m'
+[31mfatal[0m
++ echo
+
++ check_sdk
++ echo /sdk/device/rockchip/common/scripts
++ grep -q 'device/rockchip/common/scripts$'
++ /sdk/device/rockchip/common/scripts/check-sdk.sh
++ RK_SCRIPTS_DIR=/sdk/device/rockchip/common/scripts
++ RK_SDK_DIR=/sdk
++ RK_OWNER=builder
++ RK_OWNER_UID=1000
+++ id -u
++ '[' 1000 -ne 0 ']'
+++ id -u
++ '[' 1000 -ne 1000 ']'
++ case "$(findmnt -fnu -o FSTYPE -T "$RK_SCRIPTS_DIR")" in
+++ findmnt -fnu -o FSTYPE -T /sdk/device/rockchip/common/scripts
++ which python3
++ /sdk/device/rockchip/common/scripts/check-package.sh rsync
++ PACKAGE=rsync
++ COMMAND=rsync
++ APT_PACKAGE=rsync
++ which rsync
++ /sdk/device/rockchip/common/scripts/check-package.sh gcc
++ PACKAGE=gcc
++ COMMAND=gcc
++ APT_PACKAGE=gcc
++ which gcc
++ /sdk/device/rockchip/common/scripts/check-package.sh g++
++ PACKAGE=g++
++ COMMAND=g++
++ APT_PACKAGE=g++
++ which g++
++ unset RK_SUDO_ROOT
++ '[' 1000 -ne 0 ']'
+++ id -un
++ '[' builder = root ']'
++ '[' -z 1 ']'
++ export RK_INITIAL_ENV=/sdk/output/sessions/2026-08-24_08-51-41/initial.env
++ RK_INITIAL_ENV=/sdk/output/sessions/2026-08-24_08-51-41/initial.env
++ export RK_CUSTOM_ENV=/sdk/output/sessions/2026-08-24_08-51-41/custom.env
++ RK_CUSTOM_ENV=/sdk/output/sessions/2026-08-24_08-51-41/custom.env
++ export RK_FINAL_ENV=/sdk/output/sessions/2026-08-24_08-51-41/final.env
++ RK_FINAL_ENV=/sdk/output/sessions/2026-08-24_08-51-41/final.env
++ mkdir -p /sdk/output/firmware
++ cd /sdk
++ '[' -f README.md ']'
++ '[' -d common ']'
++ rm -f envsetup.sh
++ OPTIONS='firmware updateimg'
++ for opt in $OPTIONS
++ '[' -d /sdk/device/rockchip/.chips/firmware ']'
++ echo firmware
++ grep -q '^[0-9a-z_]*_defconfig$'
++ for opt in $OPTIONS
++ '[' -d /sdk/device/rockchip/.chips/updateimg ']'
++ echo updateimg
++ grep -q '^[0-9a-z_]*_defconfig$'
++ parse_scripts
++ mkdir -p /sdk/output
++ '[' '!' -r /sdk/output/.make_usage ']'
+++ find /sdk/device/rockchip/common/scripts /sdk/device/rockchip/.chip /sdk/device/rockchip/.chip/ -cnewer /sdk/output/.make_usage
++ '[' '' ']'
++ '[' '!' -r /sdk/output/.parsed_cmds ']'
+++ find /sdk/device/rockchip/common/scripts /sdk/device/rockchip/.chip /sdk/device/rockchip/.chip/ -cnewer /sdk/output/.parsed_cmds
++ '[' '' ']'
++ wait
++ source /sdk/output/.parsed_cmds
+++ RK_INIT_CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
+++ RK_PRE_BUILD_CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part'
+++ RK_BUILD_CMDS=' misc'
+++ RK_INIT_CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1'
+++ RK_PRE_BUILD_CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules'
+++ RK_POST_BUILD_CMDS=' linux-headers'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp'
+++ RK_INIT_CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto'
+++ RK_PRE_BUILD_CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi'
+++ RK_POST_BUILD_CMDS=' linux-headers extra-parts'
+++ RK_POST_BUILD_CMDS=' linux-headers extra-parts firmware'
+++ RK_INIT_CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file'
+++ RK_PRE_BUILD_CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file'
+++ RK_POST_BUILD_CMDS=' linux-headers extra-parts firmware updateimg ota-updateimg'
+++ RK_BUILD_CMDS=' misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release'
+++ RK_POST_BUILD_CMDS=' linux-headers extra-parts firmware updateimg ota-updateimg release'
+++ RK_PRE_BUILD_CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell'
++ CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file  print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release 		 linux-headers extra-parts firmware updateimg ota-updateimg release'
++ for opt in $OPTIONS
++ case "$opt" in
++ option_check ' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file  print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release 		 linux-headers extra-parts firmware updateimg ota-updateimg release' firmware
++ CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file  print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release 		 linux-headers extra-parts firmware updateimg ota-updateimg release'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^chip$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^defconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^lunch$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^[^:]*_defconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^olddefconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^savedefconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^menuconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^yocto$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-ota-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^print-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^list-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^mod-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^new-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^insert-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^del-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^move-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rename-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^resize-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kmake$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bmake$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-ota-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bshell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^misc$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^recovery-kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-modules$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^modules$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^wifibt$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^amp$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rootfs$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^yocto$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^recovery$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-createkeys$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-misc$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-ramboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-system$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^loader$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^u-boot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uefi$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all-release$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^linux-headers$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^extra-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^firmware$'
++ return 0
++ continue
++ for opt in $OPTIONS
++ case "$opt" in
++ option_check ' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file  print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release 		 linux-headers extra-parts firmware updateimg ota-updateimg release' updateimg
++ CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default default kernel-6.1 default buildroot debian yocto edit-package-file edit-ota-package-file  print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release 		 linux-headers extra-parts firmware updateimg ota-updateimg release'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^chip$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^defconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^lunch$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^[^:]*_defconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^olddefconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^savedefconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^menuconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^config$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^default$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^yocto$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^edit-ota-package-file$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^print-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^list-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^mod-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^edit-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^new-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^insert-part$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^del-part$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^move-part$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^rename-part$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^resize-part$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel-config$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel-make$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kmake$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^buildroot-config$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^bconfig$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^buildroot-make$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^bmake$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^edit-ota-package-file$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^shell$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^buildroot-shell$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^bshell$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^misc$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^recovery-kernel$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^kernel-modules$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^modules$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^wifibt$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^amp$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^rootfs$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^yocto$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^recovery$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^security-createkeys$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^security-misc$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^security-ramboot$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^security-system$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^loader$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^uboot$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^u-boot$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^uefi$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^all$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^all-release$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^linux-headers$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^extra-parts$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^firmware$'
++ for cmd in $CMDS
++ echo updateimg
++ grep -qE '^updateimg$'
++ return 0
++ continue
++ '[' '!' -d /sdk/output/sessions/2026-08-24_08-51-41 ']'
++ rm -rf /sdk/output/log /sdk/output/sessions/2026-08-24_08-51-41 /sdk/output/sessions/latest
++ mkdir -p /sdk/output/sessions/2026-08-24_08-51-41
++ ln -rsf /sdk/output/sessions /sdk/output/log
++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41 /sdk/output/sessions/latest
++ message 'Log saved at /sdk/output/sessions/2026-08-24_08-51-41'
++ rk_log 36 'Log saved at /sdk/output/sessions/2026-08-24_08-51-41'
++ LOG_COLOR=36
++ shift
++ '[' 'Log saved at /sdk/output/sessions/2026-08-24_08-51-41' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36mLog saved at /sdk/output/sessions/2026-08-24_08-51-41\e[0m'
+[36mLog saved at /sdk/output/sessions/2026-08-24_08-51-41[0m
++ cd /sdk/output/log
+++ ls -t
+++ sed 1,10d
++ rm -rf 2026-08-23_16-44-22
++ cd /sdk
++ '[' 1 ']'
++ rm -f /sdk/output/sessions/2026-08-24_08-51-41/initial.env
++ cp /tmp/tmp.gqxZU1sydQ /sdk/output/sessions/2026-08-24_08-51-41/initial.env
++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41/initial.env /sdk/output/
++ rm -f /tmp/tmp.gqxZU1sydQ
++ run_build_hooks init firmware updateimg
++ case "$1" in
++ run_hooks /sdk/device/rockchip/common/build-hooks init firmware updateimg
++ DIR=/sdk/device/rockchip/common/build-hooks
++ shift
+++ basename /sdk/device/rockchip/common/build-hooks
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/.chip/build-hooks/ ']'
++ continue
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/common/build-hooks ']'
+++ find /sdk/device/rockchip/common/build-hooks -maxdepth 1 -name '*.sh'
+++ sort
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/00-config.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/00-config.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-config.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-config.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
++ echo ' chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
++ grep -wq default
++ return 0
++ /sdk/device/rockchip/common/build-hooks/00-config.sh init firmware updateimg
++ INIT_CMDS='chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/build-hooks/00-config.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/build-hooks/00-config
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=00-config-init_2026-08-24_08-51-41
+++ case "$1" in
+++ shift
+++ try_hook init_hook 'chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default' firmware updateimg
+++ FUNC=init_hook
+++ shift
+++ CMDS='chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
+++ shift
+++ echo 'chip defconfig lunch [^:]*_defconfig olddefconfig savedefconfig menuconfig config default'
+++ grep -qE '^default( |$)'
+++ OPTS='firmware updateimg default'
+++ type init_hook
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^chip(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^lunch(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^[^:]*_defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^olddefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^savedefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^menuconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^config(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^chip(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^lunch(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^[^:]*_defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^olddefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^savedefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^menuconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^config(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^chip(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^lunch(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^[^:]*_defconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^olddefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^savedefconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^menuconfig(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^config(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=default
+++ '[' default ']'
+++ echo default
+++ grep -wq dry-run
+++ try_func init_hook default
+++ type init_hook
+++ case "${1%_hook}" in
+++ init_hook default
+++ case "${1:-default}" in
+++ prepare_config
+++ '[' -e /sdk/device/rockchip/.chip ']'
+++ cd /sdk/device/rockchip
++++ ls /sdk/device/rockchip/.chips
+++ rm -f rk3506
++++ readlink /sdk/device/rockchip/.chip
+++ ln -rsf .chips/rk3506 .
+++ cd /sdk
+++ '[' '!' -r /sdk/output/defconfig ']'
+++++ realpath /sdk/output/defconfig
++++ basename /sdk/device/rockchip/.chips/rk3506/luckfox_lyra_plus_buildroot_spinand_defconfig
+++ DEFCONFIG=luckfox_lyra_plus_buildroot_spinand_defconfig
+++ '[' '!' /sdk/output/defconfig -ef /sdk/device/rockchip/.chip/luckfox_lyra_plus_buildroot_spinand_defconfig ']'
+++ '[' /sdk/output/.config -ot /sdk/output/defconfig ']'
++++ dirname /sdk/device/rockchip/common/configs/Config.in
+++ CONFIG_DIR=/sdk/device/rockchip/common/configs
++++ find /sdk/device/rockchip/common/configs -cnewer /sdk/output/.config
+++ '[' '' ']'
+++ CFG='RK_DEFCONFIG="luckfox_lyra_plus_buildroot_spinand_defconfig"'
+++ grep -wq 'RK_DEFCONFIG="luckfox_lyra_plus_buildroot_spinand_defconfig"' /sdk/output/.config
+++ '[' /sdk/output/.config -nt /sdk/output/.config.old ']'
+++ return 0
+++ exit 0
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/05-partitions.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/05-partitions.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-partitions.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-partitions.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/08-misc.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/08-misc.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-misc.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-misc.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/10-kernel.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/10-kernel.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-kernel.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-kernel.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' default kernel-6.1'
++ echo ' default kernel-6.1'
++ grep -wq default
++ return 0
++ /sdk/device/rockchip/common/build-hooks/10-kernel.sh init firmware updateimg
+++ ls
+++ grep kernel-
++ KERNELS=kernel-6.1
++ INIT_CMDS='default kernel-6.1'
++ PRE_BUILD_CMDS='kernel-config kconfig kernel-make kmake'
++ BUILD_CMDS='kernel-6.1 kernel recovery-kernel kernel-modules modules'
++ POST_BUILD_CMDS=linux-headers
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/build-hooks/10-kernel.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/build-hooks/10-kernel
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=10-kernel-init_2026-08-24_08-51-41
+++ case "$1" in
+++ shift
+++ try_hook init_hook 'default kernel-6.1' firmware updateimg
+++ FUNC=init_hook
+++ shift
+++ CMDS='default kernel-6.1'
+++ shift
+++ echo 'default kernel-6.1'
+++ grep -qE '^default( |$)'
+++ OPTS='default firmware updateimg'
+++ type init_hook
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=default
+++ '[' default ']'
+++ echo default
+++ grep -wq dry-run
+++ try_func init_hook default
+++ type init_hook
+++ case "${1%_hook}" in
+++ init_hook default
+++ load_config RK_KERNEL_CFG
+++ '[' -r /sdk/output/.config ']'
+++ for var in $@
++++ grep '^RK_KERNEL_CFG=' /sdk/output/.config
++++ tr -d '"'
+++ export RK_KERNEL_CFG=rk3506_luckfox_defconfig
+++ check_config RK_KERNEL_CFG
++++ cat /sdk/output/.kernel
+++ local KERNEL_LAST=6.1
++++ kernel_version
++++ '[' -d kernel ']'
++++++ realpath kernel
+++++ basename /sdk/kernel-6.1
++++ KERNEL_DIR=kernel-6.1
++++ case "$KERNEL_DIR" in
++++ echo 6.1
++++ return 0
+++ local KERNEL_CURRENT=6.1
+++ load_config RK_KERNEL_PREFERRED
+++ '[' -r /sdk/output/.config ']'
+++ for var in $@
++++ grep '^RK_KERNEL_PREFERRED=' /sdk/output/.config
++++ tr -d '"'
+++ export RK_KERNEL_PREFERRED=
+++ echo default
+++ grep -q '^kernel-'
+++ '[' '' ']'
+++ '[' 6.1 ']'
+++ export RK_KERNEL_VERSION=6.1
+++ RK_KERNEL_VERSION=6.1
+++ notice 'Using last kernel version(6.1)'
+++ rk_log 35 'Using last kernel version(6.1)'
+++ LOG_COLOR=35
+++ shift
+++ '[' 'Using last kernel version(6.1)' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[35mUsing last kernel version(6.1)\e[0m'
+[35mUsing last kernel version(6.1)[0m
+++ echo 6.1
+++ '[' 6.1 '!=' 6.1 ']'
+++ return 0
+++ return 0
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^kernel-6.1(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^kernel-6.1(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^kernel-6.1(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ exit 0
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/20-wifibt.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/20-wifibt.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-wifibt.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-wifibt.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/25-amp.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/25-amp.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-amp.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-amp.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/30-rootfs.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/30-rootfs.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-rootfs.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-rootfs.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' default buildroot debian yocto'
++ echo ' default buildroot debian yocto'
++ grep -wq default
++ return 0
++ /sdk/device/rockchip/common/build-hooks/30-rootfs.sh init firmware updateimg
++ INIT_CMDS='default buildroot debian yocto'
++ PRE_BUILD_CMDS='buildroot-config bconfig buildroot-make bmake'
++ BUILD_CMDS='rootfs buildroot debian yocto'
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/build-hooks/30-rootfs.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/build-hooks/30-rootfs
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=30-rootfs-init_2026-08-24_08-51-41
+++ case "$1" in
+++ shift
+++ try_hook init_hook 'default buildroot debian yocto' firmware updateimg
+++ FUNC=init_hook
+++ shift
+++ CMDS='default buildroot debian yocto'
+++ shift
+++ echo 'default buildroot debian yocto'
+++ grep -qE '^default( |$)'
+++ OPTS='default firmware updateimg'
+++ type init_hook
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=default
+++ '[' default ']'
+++ echo default
+++ grep -wq dry-run
+++ try_func init_hook default
+++ type init_hook
+++ case "${1%_hook}" in
+++ init_hook default
+++ load_config RK_ROOTFS
+++ '[' -r /sdk/output/.config ']'
+++ for var in $@
++++ grep '^RK_ROOTFS=' /sdk/output/.config
++++ tr -d '"'
+++ export RK_ROOTFS=y
+++ check_config RK_ROOTFS
+++ '[' default '!=' default ']'
+++ '[' '' ']'
+++ return 0
+++ return 0
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^buildroot(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^debian(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^yocto(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^buildroot(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^debian(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^yocto(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^default(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^buildroot(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^debian(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^yocto(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ exit 0
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/40-recovery.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/40-recovery.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-recovery.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-recovery.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/60-security.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/60-security.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-security.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-security.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/70-loader.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/70-loader.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-loader.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-loader.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-extra-parts.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-extra-parts.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/80-firmware.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/80-firmware.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-firmware.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-firmware.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/90-updateimg.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/90-updateimg.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-updateimg.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-updateimg.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' edit-package-file edit-ota-package-file'
++ echo ' edit-package-file edit-ota-package-file'
++ grep -wq default
++ option_check ' edit-package-file edit-ota-package-file' firmware
++ CMDS=' edit-package-file edit-ota-package-file'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-ota-package-file$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/99-all.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/99-all.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-all.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-all.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/9999-shell.sh init firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/9999-shell.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-shell.sh
+++ sed -n 's@^RK_init_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-shell.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ return 0
++ rm -f '/sdk/output/.tmpconfig*'
++ CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release  linux-headers extra-parts firmware updateimg ota-updateimg release 		cleanall clean-.* post-rootfs'
++ option_check ' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release  linux-headers extra-parts firmware updateimg ota-updateimg release 		cleanall clean-.* post-rootfs' firmware updateimg
++ CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part kernel-config kconfig kernel-make kmake buildroot-config bconfig buildroot-make bmake edit-package-file edit-ota-package-file shell buildroot-shell bshell  misc kernel-6.1 kernel recovery-kernel kernel-modules modules wifibt amp rootfs buildroot debian yocto recovery security-createkeys security-misc security-ramboot security-system loader uboot u-boot uefi all all-release  linux-headers extra-parts firmware updateimg ota-updateimg release 		cleanall clean-.* post-rootfs'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^print-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^list-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^mod-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^new-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^insert-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^del-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^move-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rename-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^resize-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kmake$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bmake$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-ota-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bshell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^misc$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^recovery-kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-modules$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^modules$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^wifibt$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^amp$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rootfs$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^yocto$'
++ for cmd in $CMDS
++ grep -qE '^recovery$'
++ echo firmware
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-createkeys$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-misc$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-ramboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-system$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^loader$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^u-boot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uefi$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all-release$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^linux-headers$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^extra-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^firmware$'
++ return 0
++ set -a
++ source /sdk/output/.config
+++ RK_DEFCONFIG=luckfox_lyra_plus_buildroot_spinand_defconfig
+++ RK_CHIP_FAMILY=rk3506
+++ RK_CHIP=rk3506
+++ RK_CHIP_ARM32=y
+++ RK_ROOTFS=y
+++ RK_BUILDROOT=y
+++ RK_BUILDROOT_BASE_CFG=rk3506_luckfox
+++ RK_BUILDROOT_CFG=rockchip_rk3506_luckfox
+++ RK_YOCTO_SUPPORTS=y
+++ RK_ROOTFS_SYSTEM=buildroot
+++ RK_ROOTFS_SYSTEM_BUILDROOT=y
+++ RK_ROOTFS_TYPE=ubi
+++ RK_ROOTFS_UBI=y
+++ RK_ROOTFS_LD_CACHE=y
+++ RK_ROOTFS_HOSTNAME_CUSTOM=y
+++ RK_ROOTFS_HOSTNAME=luckfox
+++ RK_ROOTFS_LOCALE_DEFAULT=y
+++ RK_ROOTFS_INSTALL_MODULES=y
+++ RK_ROOTFS_STRIP_MODULES=y
+++ RK_ROOTFS_ASYNC_COMMIT=y
+++ RK_ROOTFS_DEBUG_INFO=y
+++ RK_ROOTFS_UDEV_RULES=y
+++ RK_DISK_HELPERS_DEFAULT=y
+++ RK_ROOTFS_OVERLAY=y
+++ RK_USB_GADGET=y
+++ RK_USB_VID=0x2207
+++ RK_USB_PID=0
+++ RK_USB_FW_VER=0x0310
+++ RK_USB_MANUFACTURER=Rockchip
+++ RK_USB_PRODUCT=rk3xxx
+++ RK_USB_ADBD=y
+++ RK_USB_ADBD_TCP_PORT=5555
+++ RK_USB_ADBD_SHELL=/bin/bash
+++ RK_USB_EXTRA=
+++ RK_USB_HOOKS=
+++ RK_EXTRA_FONTS_ENABLED_EN=y
+++ RK_ROOTFS_INPUT_EVENT_DAEMON=y
+++ RK_ROOTFS_IRQBALANCE=y
+++ RK_ROOTFS_FSTRIM=y
+++ RK_ROOTFS_FSTRIM_INTERVAL=3600
+++ RK_ROOTFS_GENERATE_LOGS=y
+++ RK_ROOTFS_PREFER_PREBUILT_TOOLS=y
+++ RK_LUCKFOX_LYRA=y
+++ RK_LUCKFOX_CONFIG=y
+++ RK_ROOTFS_EXTRA_OVERLAY_DIRS=
+++ RK_LOADER=y
+++ RK_UBOOT_CFG=rk3506_luckfox
+++ RK_UBOOT_CFG_FRAGMENTS=rk-amp
+++ RK_UBOOT_OPTS=
+++ RK_UBOOT_INI=
+++ RK_UBOOT_TRUST_INI=
+++ RK_UBOOT_SPL=y
+++ RK_UBOOT_ARCH=arm
+++ RK_UBOOT_ARM32=y
+++ RK_AMP=y
+++ RK_AMP_ARCH=arm
+++ RK_AMP_ARM32=y
+++ RK_AMP_HAL_TARGET=rk3506
+++ RK_AMP_RTT_TARGET=rk3506-32
+++ RK_AMP_MCU_HAL_TARGET=miranda-rt
+++ RK_AMP_MCU_RTT_TARGET=rk3506-mcu
+++ RK_AMP_CFG=
+++ RK_AMP_FIT_ITS=amp_miranda.its
+++ RK_AMP_RTT_ROOT_DATA=
+++ RK_KERNEL=y
+++ RK_KERNEL_PREFERRED=
+++ RK_KERNEL_ARCH=arm
+++ RK_KERNEL_ARM32=y
+++ RK_KERNEL_CFG=rk3506_luckfox_defconfig
+++ RK_KERNEL_CFG_FRAGMENTS='rk3506-display.config rockchip_amp.config miranda_amp.config'
+++ RK_KERNEL_DTS_NAME=rk3506g-corley-lyra-plus
+++ RK_KERNEL_DTS_DIR=kernel/arch/arm/boot/dts
+++ RK_KERNEL_DTS=kernel/arch/arm/boot/dts/rk3506g-corley-lyra-plus.dts
+++ RK_KERNEL_DTB=kernel/arch/arm/boot/dts/rk3506g-corley-lyra-plus.dtb
+++ RK_KERNEL_IMG=kernel/arch/arm/boot/zImage
+++ RK_BOOT_IMG=zboot.img
+++ RK_BOOT_COMPRESSED=y
+++ RK_BOOT_FIT_ITS_NAME=zboot.its
+++ RK_BOOT_FIT_ITS=/sdk/device/rockchip/.chip/zboot.its
+++ RK_EXTRA_PARTITION_NUM=0
+++ RK_EXTRA_PARTITION_STR=@@@@
+++ RK_PARAMETER=parameter-lyra-spinand.txt
+++ RK_USE_FIT_IMG=y
+++ RK_UPDATE=y
+++ RK_PACKAGE_FILE_DEFAULT=y
+++ RK_OTA_PACKAGE_FILE_DEFAULT=y
+++ RK_OVERLAY=y
+++ RK_SAVE_TRACKED=y
++ cp /sdk/output/.config /sdk/output/sessions/2026-08-24_08-51-41
+++ kernel_version
+++ '[' -d kernel ']'
+++++ realpath kernel
++++ basename /sdk/kernel-6.1
+++ KERNEL_DIR=kernel-6.1
+++ case "$KERNEL_DIR" in
+++ echo 6.1
+++ return 0
++ export RK_KERNEL_VERSION=6.1
++ RK_KERNEL_VERSION=6.1
++ '[' -z 1 ']'
++ rm -f /sdk/output/sessions/2026-08-24_08-51-41/custom.env
+++ grep '^RK_' /sdk/output/sessions/2026-08-24_08-51-41/initial.env
+++ true
++ '[' -e /sdk/output/sessions/2026-08-24_08-51-41/custom.env ']'
++ '[' '!' -d /sdk/overlay ']'
++ source /sdk/device/rockchip/common/scripts/partition-helper
+++ '[' /sdk/device/rockchip/common/scripts/partition-helper = ./build.sh -o -z 2026-08-24_08-51-41 ']'
+++ PART_TABLE=/sdk/output/sessions/2026-08-24_08-51-41/part-table
+++ HDR_PART='<hidden>'
++ rk_partition_init
++ rk_partition_parse
++ PARAMETER=/sdk/device/rockchip/.chip/parameter-lyra-spinand.txt
++ '[' '!' -r /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt ']'
+++ grep '^CMDLINE:' /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt
+++ grep -o '0x.*'
++ PARTS='0x00002000@0x00002000(uboot),0x00006000@0x00004000(boot),0x00067b00@0x00010000(rootfs),0x00007800@0x00077b00(config),-@0x0007f300(amp:grow)'
+++ echo '0x00002000@0x00002000(uboot),0x00006000@0x00004000(boot),0x00067b00@0x00010000(rootfs),0x00007800@0x00077b00(config),-@0x0007f300(amp:grow)'
+++ awk -F '[@():]' '{print $2}'
++ echo '<hidden> 0x00002000'
++ xargs -n 1
++ echo '0x00002000@0x00002000(uboot) 0x00006000@0x00004000(boot) 0x00067b00@0x00010000(rootfs) 0x00007800@0x00077b00(config) -@0x0007f300(amp:grow)'
++ awk -F '[@():]' '{print $3,$1}'
++ set +a
+++ kernel_version_raw
+++ '[' -d kernel ']'
+++ VERSION_KEYS='VERSION PATCHLEVEL'
+++ VERSION=
+++ for k in $VERSION_KEYS
++++ grep '^VERSION = ' kernel/Makefile
++++ cut '-d ' -f3
+++ v=6
+++ VERSION=6
+++ for k in $VERSION_KEYS
++++ grep '^PATCHLEVEL = ' kernel/Makefile
++++ cut '-d ' -f3
+++ v=1
+++ VERSION=6.1
+++ echo 6.1
++ export RK_KERNEL_VERSION_RAW=6.1
++ RK_KERNEL_VERSION_RAW=6.1
+++ kernel_version
+++ '[' -d kernel ']'
+++++ realpath kernel
++++ basename /sdk/kernel-6.1
+++ KERNEL_DIR=kernel-6.1
+++ case "$KERNEL_DIR" in
+++ echo 6.1
+++ return 0
++ export RK_KERNEL_VERSION=6.1
++ RK_KERNEL_VERSION=6.1
++ case "$OPTIONS" in
++ rm -f /sdk/output/sessions/2026-08-24_08-51-41/final.env
++ env
++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41/final.env /sdk/output/
++ message '\n=========================================='
++ rk_log 36 '\n=========================================='
++ LOG_COLOR=36
++ shift
++ '[' '\n==========================================' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m\n==========================================\e[0m'
+[36m
+==========================================[0m
++ message '          Final configs'
++ rk_log 36 '          Final configs'
++ LOG_COLOR=36
++ shift
++ '[' '          Final configs' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m          Final configs\e[0m'
+[36m          Final configs[0m
++ message ==========================================
++ rk_log 36 ==========================================
++ LOG_COLOR=36
++ shift
++ '[' ========================================== = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m==========================================\e[0m'
+[36m==========================================[0m
++ env
++ grep -E '^RK_.*=.+'
++ grep -vE 'PARTITION_[0-9]'
++ grep -vE '=""$|_DEFAULT=y|^RK_DEFAULT_TARGET|CMDS='
++ grep -vE '^RK_CONFIG|_BASE_CFG=|_LINK=|DIR=|_ENV=|_NAME=|_DTB='
++ grep -vE '_HELPER=|_SUPPORTS=|_ARM64=|_ARM=|_HOST='
++ grep -vE '^RK_ROOTFS_SYSTEM_|^RK_YOCTO_DISPLAY_PLATFORM_'
++ sort
+RK_AMP=y
+RK_AMP_ARCH=arm
+RK_AMP_ARM32=y
+RK_AMP_FIT_ITS=amp_miranda.its
+RK_AMP_HAL_TARGET=rk3506
+RK_AMP_MCU_HAL_TARGET=miranda-rt
+RK_AMP_MCU_RTT_TARGET=rk3506-mcu
+RK_AMP_RTT_TARGET=rk3506-32
+RK_BOOT_COMPRESSED=y
+RK_BOOT_FIT_ITS=/sdk/device/rockchip/.chip/zboot.its
+RK_BOOT_IMG=zboot.img
+RK_BUILDROOT=y
+RK_BUILDROOT_CFG=rockchip_rk3506_luckfox
+RK_CHIP=rk3506
+RK_CHIP_ARM32=y
+RK_CHIP_FAMILY=rk3506
+RK_DEFCONFIG=luckfox_lyra_plus_buildroot_spinand_defconfig
+RK_EXTRA_FONTS_ENABLED_EN=y
+RK_EXTRA_PARTITION_NUM=0
+RK_EXTRA_PARTITION_STR=@@@@
+RK_KERNEL=y
+RK_KERNEL_ARCH=arm
+RK_KERNEL_ARM32=y
+RK_KERNEL_CFG=rk3506_luckfox_defconfig
+RK_KERNEL_CFG_FRAGMENTS=rk3506-display.config rockchip_amp.config miranda_amp.config
+RK_KERNEL_DTS=kernel/arch/arm/boot/dts/rk3506g-corley-lyra-plus.dts
+RK_KERNEL_IMG=kernel/arch/arm/boot/zImage
+RK_KERNEL_VERSION=6.1
+RK_KERNEL_VERSION_RAW=6.1
+RK_LOADER=y
+RK_LUCKFOX_CONFIG=y
+RK_LUCKFOX_LYRA=y
+RK_OVERLAY=y
+RK_OWNER=builder
+RK_OWNER_UID=1000
+RK_PARAMETER=parameter-lyra-spinand.txt
+RK_ROOTFS=y
+RK_ROOTFS_ASYNC_COMMIT=y
+RK_ROOTFS_DEBUG_INFO=y
+RK_ROOTFS_FSTRIM=y
+RK_ROOTFS_FSTRIM_INTERVAL=3600
+RK_ROOTFS_GENERATE_LOGS=y
+RK_ROOTFS_HOSTNAME=luckfox
+RK_ROOTFS_HOSTNAME_CUSTOM=y
+RK_ROOTFS_INPUT_EVENT_DAEMON=y
+RK_ROOTFS_INSTALL_MODULES=y
+RK_ROOTFS_IRQBALANCE=y
+RK_ROOTFS_LD_CACHE=y
+RK_ROOTFS_OVERLAY=y
+RK_ROOTFS_PREFER_PREBUILT_TOOLS=y
+RK_ROOTFS_STRIP_MODULES=y
+RK_ROOTFS_SYSTEM=buildroot
+RK_ROOTFS_TYPE=ubi
+RK_ROOTFS_UBI=y
+RK_ROOTFS_UDEV_RULES=y
+RK_SAVE_TRACKED=y
+RK_SESSION=2026-08-24_08-51-41
+RK_UBOOT_ARCH=arm
+RK_UBOOT_ARM32=y
+RK_UBOOT_CFG=rk3506_luckfox
+RK_UBOOT_CFG_FRAGMENTS=rk-amp
+RK_UBOOT_SPL=y
+RK_UPDATE=y
+RK_USB_ADBD=y
+RK_USB_ADBD_SHELL=/bin/bash
+RK_USB_ADBD_TCP_PORT=5555
+RK_USB_FW_VER=0x0310
+RK_USB_GADGET=y
+RK_USB_MANUFACTURER=Rockchip
+RK_USB_PID=0
+RK_USB_PRODUCT=rk3xxx
+RK_USB_VID=0x2207
+RK_USE_FIT_IMG=y
++ echo
+
++ run_build_hooks pre-build firmware updateimg
++ case "$1" in
++ run_hooks /sdk/device/rockchip/common/build-hooks pre-build firmware updateimg
++ DIR=/sdk/device/rockchip/common/build-hooks
++ shift
+++ basename /sdk/device/rockchip/common/build-hooks
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/.chip/build-hooks/ ']'
++ continue
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/common/build-hooks ']'
+++ find /sdk/device/rockchip/common/build-hooks -maxdepth 1 -name '*.sh'
+++ sort
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/00-config.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/00-config.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-config.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-config.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/05-partitions.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/05-partitions.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-partitions.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-partitions.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part'
++ echo ' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part'
++ grep -wq default
++ option_check ' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part' firmware
++ CMDS=' print-parts list-parts mod-parts edit-parts new-parts insert-part del-part move-part rename-part resize-part'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^print-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^list-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^mod-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^new-parts$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^insert-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^del-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^move-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rename-part$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^resize-part$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/08-misc.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/08-misc.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-misc.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-misc.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/10-kernel.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/10-kernel.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-kernel.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-kernel.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' kernel-config kconfig kernel-make kmake'
++ echo ' kernel-config kconfig kernel-make kmake'
++ grep -wq default
++ option_check ' kernel-config kconfig kernel-make kmake' firmware
++ CMDS=' kernel-config kconfig kernel-make kmake'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kmake$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/20-wifibt.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/20-wifibt.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-wifibt.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-wifibt.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/25-amp.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/25-amp.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-amp.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-amp.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/30-rootfs.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/30-rootfs.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-rootfs.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-rootfs.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' buildroot-config bconfig buildroot-make bmake'
++ echo ' buildroot-config bconfig buildroot-make bmake'
++ grep -wq default
++ option_check ' buildroot-config bconfig buildroot-make bmake' firmware
++ CMDS=' buildroot-config bconfig buildroot-make bmake'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-config$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bconfig$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-make$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bmake$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/40-recovery.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/40-recovery.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-recovery.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-recovery.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/60-security.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/60-security.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-security.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-security.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/70-loader.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/70-loader.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-loader.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-loader.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-extra-parts.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-extra-parts.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/80-firmware.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/80-firmware.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-firmware.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-firmware.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/90-updateimg.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/90-updateimg.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-updateimg.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-updateimg.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' edit-package-file edit-ota-package-file'
++ echo ' edit-package-file edit-ota-package-file'
++ grep -wq default
++ option_check ' edit-package-file edit-ota-package-file' firmware
++ CMDS=' edit-package-file edit-ota-package-file'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-package-file$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^edit-ota-package-file$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/99-all.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/99-all.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-all.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-all.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/9999-shell.sh pre-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/9999-shell.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-shell.sh
+++ sed -n 's@^RK_pre_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-shell.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' shell buildroot-shell bshell'
++ echo ' shell buildroot-shell bshell'
++ grep -wq default
++ option_check ' shell buildroot-shell bshell' firmware
++ CMDS=' shell buildroot-shell bshell'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot-shell$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^bshell$'
++ return 1
++ continue
++ return 0
++ run_build_hooks build firmware updateimg
++ case "$1" in
+++ start_log build
++++ date +%F_%H-%M-%S
+++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/build_2026-08-24_08-51-41.log
+++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41/build_2026-08-24_08-51-41.log /sdk/output/sessions/2026-08-24_08-51-41/build.log
++++ date '+%F %T'
+++ echo '# 2026-08-24 08:51:41'
+++ echo /sdk/output/sessions/2026-08-24_08-51-41/build_2026-08-24_08-51-41.log
++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/build_2026-08-24_08-51-41.log
++ echo -e '# run hook: build' firmware 'updateimg\n'
++ run_hooks /sdk/device/rockchip/common/build-hooks build firmware updateimg
++ tee -a /sdk/output/sessions/2026-08-24_08-51-41/build_2026-08-24_08-51-41.log
++ DIR=/sdk/device/rockchip/common/build-hooks
++ shift
+++ basename /sdk/device/rockchip/common/build-hooks
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/.chip/build-hooks/ ']'
++ continue
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/common/build-hooks ']'
+++ find /sdk/device/rockchip/common/build-hooks -maxdepth 1 -name '*.sh'
+++ sort
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/00-config.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/00-config.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-config.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-config.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/05-partitions.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/05-partitions.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-partitions.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-partitions.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/08-misc.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/08-misc.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-misc.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-misc.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' misc'
++ echo ' misc'
++ grep -wq default
++ option_check ' misc' firmware
++ CMDS=' misc'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^misc$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/10-kernel.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/10-kernel.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-kernel.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-kernel.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' kernel-6.1 kernel recovery-kernel kernel-modules modules'
++ echo ' kernel-6.1 kernel recovery-kernel kernel-modules modules'
++ grep -wq default
++ option_check ' kernel-6.1 kernel recovery-kernel kernel-modules modules' firmware
++ CMDS=' kernel-6.1 kernel recovery-kernel kernel-modules modules'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-6.1$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^recovery-kernel$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^kernel-modules$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^modules$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/20-wifibt.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/20-wifibt.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-wifibt.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-wifibt.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' wifibt'
++ echo ' wifibt'
++ grep -wq default
++ option_check ' wifibt' firmware
++ CMDS=' wifibt'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^wifibt$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/25-amp.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/25-amp.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-amp.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-amp.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' amp'
++ echo ' amp'
++ grep -wq default
++ option_check ' amp' firmware
++ CMDS=' amp'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^amp$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/30-rootfs.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/30-rootfs.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-rootfs.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-rootfs.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' rootfs buildroot debian yocto'
++ echo ' rootfs buildroot debian yocto'
++ grep -wq default
++ option_check ' rootfs buildroot debian yocto' firmware
++ CMDS=' rootfs buildroot debian yocto'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^rootfs$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^buildroot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^debian$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^yocto$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/40-recovery.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/40-recovery.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-recovery.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-recovery.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' recovery'
++ echo ' recovery'
++ grep -wq default
++ option_check ' recovery' firmware
++ CMDS=' recovery'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^recovery$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/60-security.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/60-security.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-security.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-security.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' security-createkeys security-misc security-ramboot security-system'
++ echo ' security-createkeys security-misc security-ramboot security-system'
++ grep -wq default
++ option_check ' security-createkeys security-misc security-ramboot security-system' firmware
++ CMDS=' security-createkeys security-misc security-ramboot security-system'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-createkeys$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-misc$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-ramboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^security-system$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/70-loader.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/70-loader.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-loader.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-loader.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' loader uboot u-boot uefi'
++ echo ' loader uboot u-boot uefi'
++ grep -wq default
++ option_check ' loader uboot u-boot uefi' firmware
++ CMDS=' loader uboot u-boot uefi'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^loader$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uboot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^u-boot$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^uefi$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-extra-parts.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-extra-parts.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/80-firmware.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/80-firmware.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-firmware.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-firmware.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/90-updateimg.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/90-updateimg.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-updateimg.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-updateimg.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/99-all.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/99-all.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-all.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-all.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' all all-release'
++ echo ' all all-release'
++ grep -wq default
++ option_check ' all all-release' firmware
++ CMDS=' all all-release'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^all-release$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/9999-shell.sh build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/9999-shell.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-shell.sh
+++ sed -n 's@^RK_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-shell.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ HOOK_RET=0
++ '[' 0 -ne 0 ']'
++ run_build_hooks post-build firmware updateimg
++ case "$1" in
+++ start_log post-build
++++ date +%F_%H-%M-%S
+++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/post-build_2026-08-24_08-51-41.log
+++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41/post-build_2026-08-24_08-51-41.log /sdk/output/sessions/2026-08-24_08-51-41/post-build.log
++++ date '+%F %T'
+++ echo '# 2026-08-24 08:51:41'
+++ echo /sdk/output/sessions/2026-08-24_08-51-41/post-build_2026-08-24_08-51-41.log
++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/post-build_2026-08-24_08-51-41.log
++ echo -e '# run hook: post-build' firmware 'updateimg\n'
++ run_hooks /sdk/device/rockchip/common/build-hooks post-build firmware updateimg
++ tee -a /sdk/output/sessions/2026-08-24_08-51-41/post-build_2026-08-24_08-51-41.log
++ DIR=/sdk/device/rockchip/common/build-hooks
++ shift
+++ basename /sdk/device/rockchip/common/build-hooks
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/.chip/build-hooks/ ']'
++ continue
++ for dir in "$RK_CHIP_DIR/$(basename "$DIR")/" "$DIR"
++ '[' -d /sdk/device/rockchip/common/build-hooks ']'
+++ find /sdk/device/rockchip/common/build-hooks -maxdepth 1 -name '*.sh'
+++ sort
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/00-config.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/00-config.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-config.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-config.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/05-partitions.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/05-partitions.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-partitions.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-partitions.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/08-misc.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/08-misc.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-misc.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-misc.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/10-kernel.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/10-kernel.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-kernel.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-kernel.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' linux-headers'
++ echo ' linux-headers'
++ grep -wq default
++ option_check ' linux-headers' firmware
++ CMDS=' linux-headers'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^linux-headers$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/20-wifibt.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/20-wifibt.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-wifibt.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-wifibt.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/25-amp.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/25-amp.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-amp.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-amp.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/30-rootfs.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/30-rootfs.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-rootfs.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-rootfs.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/40-recovery.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/40-recovery.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-recovery.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-recovery.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/60-security.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/60-security.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-security.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-security.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/70-loader.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/70-loader.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-loader.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-loader.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/75-extra-parts.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-extra-parts.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-extra-parts.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' extra-parts'
++ echo ' extra-parts'
++ grep -wq default
++ option_check ' extra-parts' firmware
++ CMDS=' extra-parts'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^extra-parts$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/80-firmware.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/80-firmware.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-firmware.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-firmware.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' firmware'
++ echo ' firmware'
++ grep -wq default
++ option_check ' firmware' firmware
++ CMDS=' firmware'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^firmware$'
++ return 0
++ /sdk/device/rockchip/common/build-hooks/80-firmware.sh post-build firmware updateimg
++ POST_BUILD_CMDS=firmware
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/build-hooks/80-firmware.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/build-hooks/80-firmware
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=80-firmware-post-build_2026-08-24_08-51-41
+++ case "$1" in
+++ shift
+++ try_hook post_build_hook firmware firmware updateimg
+++ FUNC=post_build_hook
+++ shift
+++ CMDS=firmware
+++ shift
+++ echo firmware
+++ grep -qE '^default( |$)'
+++ OPTS='firmware updateimg default'
+++ type post_build_hook
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo firmware
++++ grep -E '^firmware(:|$)'
++++ tr : ' '
+++ ARGS=firmware
+++ '[' firmware ']'
+++ echo firmware
+++ grep -wq dry-run
+++ try_func post_build_hook firmware
+++ type post_build_hook
+++ case "${1%_hook}" in
+++ '[' '' ']'
++++ start_log 80-firmware-post-build 80-firmware-post-build_2026-08-24_08-51-41
++++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build_2026-08-24_08-51-41.log
++++ ln -rsf /sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build_2026-08-24_08-51-41.log /sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build.log
+++++ date '+%F %T'
++++ echo '# 2026-08-24 08:51:41'
++++ echo /sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build_2026-08-24_08-51-41.log
+++ LOG_FILE=/sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build_2026-08-24_08-51-41.log
+++ echo -e '# run func: post_build_hook' 'firmware\n'
+++ post_build_hook firmware
+++ tee -a /sdk/output/sessions/2026-08-24_08-51-41/80-firmware-post-build_2026-08-24_08-51-41.log
+++ message ==========================================
+++ rk_log 36 ==========================================
+++ LOG_COLOR=36
+++ shift
+++ '[' ========================================== = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[36m==========================================\e[0m'
+[36m==========================================[0m
+++ message '          Start packing firmwares'
+++ rk_log 36 '          Start packing firmwares'
+++ LOG_COLOR=36
+++ shift
+++ '[' '          Start packing firmwares' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[36m          Start packing firmwares\e[0m'
+[36m          Start packing firmwares[0m
+++ message ==========================================
+++ rk_log 36 ==========================================
+++ LOG_COLOR=36
+++ shift
+++ '[' ========================================== = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[36m==========================================\e[0m'
+[36m==========================================[0m
+++ build_firmware
+++ mkdir -p /sdk/output/firmware
+++ rm -rf /sdk/rockdev
+++ ln -rsf /sdk/output/firmware /sdk/rockdev
+++ /sdk/device/rockchip/common/scripts/check-grow-align.sh
++ RK_SCRIPTS_DIR=/sdk/device/rockchip/common/scripts
++ RK_SDK_DIR=/sdk
++ RK_CHIP_DIR=/sdk/device/rockchip/.chip
++ RK_PARAMETER=parameter-lyra-spinand.txt
++ cd /sdk
++ '[' -r kernel/.config -a -r /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt ']'
++ grep -q '^CMDLINE:.*:grow)$' /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt
+++ grep '^CONFIG_DM_VERITY=y$' kernel/.config
+++ true
++ DM_VERITY=
+++ grep '^GROW_ALIGN:' /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt
++ GROW_ALIGN_CFG='GROW_ALIGN: 0'
+++ echo GROW_ALIGN: 0
+++ cut -d: -f2-
+++ xargs
++ GROW_ALIGN_VAL=0
++ '[' '' -a 0 = 1 ']'
++ '[' -z '' -a 'GROW_ALIGN: 0' -a 0 '!=' 1 ']'
++ exit 0
+++ link_image /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt /sdk/output/firmware/parameter.txt
+++ SRC=/sdk/device/rockchip/.chip/parameter-lyra-spinand.txt
+++ DST=/sdk/output/firmware/parameter.txt
+++ message 'Linking /sdk/output/firmware/parameter.txt from /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt...'
+++ rk_log 36 'Linking /sdk/output/firmware/parameter.txt from /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt...'
+++ LOG_COLOR=36
+++ shift
+++ '[' 'Linking /sdk/output/firmware/parameter.txt from /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt...' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[36mLinking /sdk/output/firmware/parameter.txt from /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt...\e[0m'
+[36mLinking /sdk/output/firmware/parameter.txt from /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt...[0m
+++ ln -rsf /sdk/device/rockchip/.chip/parameter-lyra-spinand.txt /sdk/output/firmware/parameter.txt
+++ /sdk/device/rockchip/common/scripts/mk-extra-parts.sh
++ POST_BUILD_CMDS=extra-parts
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/scripts/mk-extra-parts.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/scripts/mk-extra-parts
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=mk-extra-parts-_2026-08-24_08-51-41
+++ case "$1" in
+++ '[' '' ']'
+++ '[' '' = dry-run ']'
++ post_build_hook
++ /sdk/device/rockchip/common/scripts/check-package.sh fakeroot
++ PACKAGE=fakeroot
++ COMMAND=fakeroot
++ APT_PACKAGE=fakeroot
++ which fakeroot
++++ rk_extra_part_num
++++ echo 0
+++ seq 1 0
++ finish_build build_extra_part
+++ basename /sdk/device/rockchip/common/scripts/mk-extra-parts.sh
++ notice 'Running mk-extra-parts.sh - build_extra_part succeeded.'
++ rk_log 35 'Running mk-extra-parts.sh - build_extra_part succeeded.'
++ LOG_COLOR=35
++ shift
++ '[' 'Running mk-extra-parts.sh - build_extra_part succeeded.' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mRunning mk-extra-parts.sh - build_extra_part succeeded.\e[0m'
+[35mRunning mk-extra-parts.sh - build_extra_part succeeded.[0m
++ cd /sdk
+++ '[' '!' -r /sdk/output/firmware/MiniLoaderAll.bin ']'
+++ notice 'Packed files:'
+++ rk_log 35 'Packed files:'
+++ LOG_COLOR=35
+++ shift
+++ '[' 'Packed files:' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[35mPacked files:\e[0m'
+[35mPacked files:[0m
+++ for f in "$RK_FIRMWARE_DIR"/*
++++ basename /sdk/output/firmware/MiniLoaderAll.bin
+++ NAME=MiniLoaderAll.bin
+++ '[' '!' -r /sdk/output/firmware/MiniLoaderAll.bin ']'
+++ echo -n MiniLoaderAll.bin
+MiniLoaderAll.bin++ '[' -L /sdk/output/firmware/MiniLoaderAll.bin ']'
++++ readlink -f /sdk/output/firmware/MiniLoaderAll.bin
+++ echo -n '(/sdk/u-boot/rk3506_spl_loader_v1.04.110.bin)'
+(/sdk/u-boot/rk3506_spl_loader_v1.04.110.bin)+++ ls -lLh /sdk/output/firmware/MiniLoaderAll.bin
++++ xargs
++++ cut '-d ' -f 5
+++ FILE_SIZE=263K
+++ echo ': 263K'
+: 263K
+++ echo MiniLoaderAll.bin
+++ grep -q '.img$'
+++ continue
+++ for f in "$RK_FIRMWARE_DIR"/*
++++ basename /sdk/output/firmware/boot.img
+++ NAME=boot.img
+++ '[' '!' -r /sdk/output/firmware/boot.img ']'
+++ echo -n boot.img
+boot.img++ '[' -L /sdk/output/firmware/boot.img ']'
++++ readlink -f /sdk/output/firmware/boot.img
+++ echo -n '(/sdk/kernel-6.1/zboot.img)'
+(/sdk/kernel-6.1/zboot.img)+++ ls -lLh /sdk/output/firmware/boot.img
++++ xargs
++++ cut '-d ' -f 5
+++ FILE_SIZE=6.1M
+++ echo ': 6.1M'
+: 6.1M
+++ echo boot.img
+++ grep -q '.img$'
+++ PART_NAME=boot
++++ rk_partition_size_kb boot
+++++ rk_partition_size boot
+++++ grep -E -m 1 '^boot(|_[a-z]) ' /sdk/output/sessions/2026-08-24_08-51-41/part-table
+++++ cut '-d ' -f2
+++++ tr -d '\-'
++++ PART_SIZE=0x00006000
++++ echo 12288
+++ PART_SIZE_KB=12288
+++ '[' boot = rootfs -a 12288 -eq 0 ']'
+++ '[' '!' 12288 -eq 0 ']'
++++ stat -Lc %s /sdk/output/firmware/boot.img
+++ FILE_SIZE_KB=6242
+++ '[' 12288 -lt 6242 ']'
+++ for f in "$RK_FIRMWARE_DIR"/*
++++ basename /sdk/output/firmware/parameter.txt
+++ NAME=parameter.txt
+++ '[' '!' -r /sdk/output/firmware/parameter.txt ']'
+++ echo -n parameter.txt
+parameter.txt++ '[' -L /sdk/output/firmware/parameter.txt ']'
++++ readlink -f /sdk/output/firmware/parameter.txt
+++ echo -n '(/sdk/device/rockchip/.chips/rk3506/parameter-lyra-spinand.txt)'
+(/sdk/device/rockchip/.chips/rk3506/parameter-lyra-spinand.txt)+++ ls -lLh /sdk/output/firmware/parameter.txt
++++ xargs
++++ cut '-d ' -f 5
+++ FILE_SIZE=390
+++ echo ': 390'
+: 390
+++ echo parameter.txt
+++ grep -q '.img$'
+++ continue
+++ for f in "$RK_FIRMWARE_DIR"/*
++++ basename /sdk/output/firmware/rootfs.img
+++ NAME=rootfs.img
+++ '[' '!' -r /sdk/output/firmware/rootfs.img ']'
+++ echo -n rootfs.img
+rootfs.img++ '[' -L /sdk/output/firmware/rootfs.img ']'
++++ readlink -f /sdk/output/firmware/rootfs.img
+++ echo -n '(/sdk/buildroot/output/rockchip_rk3506_luckfox/images/rootfs.ubi)'
+(/sdk/buildroot/output/rockchip_rk3506_luckfox/images/rootfs.ubi)+++ ls -lLh /sdk/output/firmware/rootfs.img
++++ xargs
++++ cut '-d ' -f 5
+++ FILE_SIZE=119M
+++ echo ': 119M'
+: 119M
+++ echo rootfs.img
+++ grep -q '.img$'
+++ PART_NAME=rootfs
++++ rk_partition_size_kb rootfs
+++++ rk_partition_size rootfs
+++++ grep -E -m 1 '^rootfs(|_[a-z]) ' /sdk/output/sessions/2026-08-24_08-51-41/part-table
+++++ cut '-d ' -f2
+++++ tr -d '\-'
++++ PART_SIZE=0x00067b00
++++ echo 212352
+++ PART_SIZE_KB=212352
+++ '[' rootfs = rootfs -a 212352 -eq 0 ']'
+++ '[' '!' 212352 -eq 0 ']'
++++ stat -Lc %s /sdk/output/firmware/rootfs.img
+++ FILE_SIZE_KB=121600
+++ '[' 212352 -lt 121600 ']'
+++ for f in "$RK_FIRMWARE_DIR"/*
++++ basename /sdk/output/firmware/uboot.img
+++ NAME=uboot.img
+++ '[' '!' -r /sdk/output/firmware/uboot.img ']'
+++ echo -n uboot.img
+uboot.img++ '[' -L /sdk/output/firmware/uboot.img ']'
++++ readlink -f /sdk/output/firmware/uboot.img
+++ echo -n '(/sdk/u-boot/uboot.img)'
+(/sdk/u-boot/uboot.img)+++ ls -lLh /sdk/output/firmware/uboot.img
++++ xargs
++++ cut '-d ' -f 5
+++ FILE_SIZE=4.0M
+++ echo ': 4.0M'
+: 4.0M
+++ echo uboot.img
+++ grep -q '.img$'
+++ PART_NAME=uboot
++++ rk_partition_size_kb uboot
+++++ rk_partition_size uboot
+++++ grep -E -m 1 '^uboot(|_[a-z]) ' /sdk/output/sessions/2026-08-24_08-51-41/part-table
+++++ cut '-d ' -f2
+++++ tr -d '\-'
++++ PART_SIZE=0x00002000
++++ echo 4096
+++ PART_SIZE_KB=4096
+++ '[' uboot = rootfs -a 4096 -eq 0 ']'
+++ '[' '!' 4096 -eq 0 ']'
++++ stat -Lc %s /sdk/output/firmware/uboot.img
+++ FILE_SIZE_KB=4096
+++ '[' 4096 -lt 4096 ']'
+++ '[' -z y ']'
+++ /sdk/device/rockchip/common/scripts/mk-updateimg.sh
++ RK_PACK_TOOL_DIR=/sdk/tools/linux/Linux_Pack_Firmware/rockdev
++ INIT_CMDS='edit-package-file edit-ota-package-file'
++ PRE_BUILD_CMDS='edit-package-file edit-ota-package-file'
++ POST_BUILD_CMDS='updateimg ota-updateimg'
++ source /sdk/device/rockchip/common/build-hooks/build-helper
+++ '[' -z '' ']'
+++ '[' /sdk/device/rockchip/common/build-hooks/build-helper = /sdk/device/rockchip/common/scripts/mk-updateimg.sh -o -z 2026-08-24_08-51-41 ']'
+++ trap err_handler ERR
+++ set -eE
+++ cd /sdk
++++ basename /sdk/device/rockchip/common/scripts/mk-updateimg
++++ date +%F_%H-%M-%S
+++ LOG_FILE_NAME=mk-updateimg-_2026-08-24_08-51-41
+++ case "$1" in
+++ '[' '' ']'
+++ '[' '' = dry-run ']'
++ case "$@" in
++ post_build_hook updateimg
++ case "$1" in
++ build_updateimg
++ '[' '' ']'
++ notice 'Making update image...'
++ rk_log 35 'Making update image...'
++ LOG_COLOR=35
++ shift
++ '[' 'Making update image...' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mMaking update image...\e[0m'
+[35mMaking update image...[0m
++ do_build_updateimg
++ check_config RK_UPDATE
++ unset missing
++ for var in $@
++ eval '[' -z '"$RK_UPDATE"' ']'
+++ '[' -z y ']'
++ continue
++ '[' '' ']'
++ return 0
++ TYPE=update
++ OUT_DIR=/sdk/output/update
++ IMAGE_DIR=/sdk/output/update/Image
++ TARGET=/sdk/output/firmware/update.img
++ case "$TYPE" in
++ PKG_FILE=
++ '[' '!' -r /sdk/output/firmware/parameter.txt ']'
++ '[' '!' -r /sdk/output/firmware/MiniLoaderAll.bin ']'
++ message ==========================================
++ rk_log 36 ==========================================
++ LOG_COLOR=36
++ shift
++ '[' ========================================== = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m==========================================\e[0m'
+[36m==========================================[0m
++ message '          Start packing update image'
++ rk_log 36 '          Start packing update image'
++ LOG_COLOR=36
++ shift
++ '[' '          Start packing update image' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m          Start packing update image\e[0m'
+[36m          Start packing update image[0m
++ message ==========================================
++ rk_log 36 ==========================================
++ LOG_COLOR=36
++ shift
++ '[' ========================================== = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[36m==========================================\e[0m'
+[36m==========================================[0m
++ '[' '' ']'
++ rm -rf /sdk/output/firmware/update.img /sdk/output/update
++ mkdir -p /sdk/output/update/Image
++ cd /sdk/output/update/Image
++ ln -rsf /sdk/output/firmware/MiniLoaderAll.bin /sdk/output/firmware/boot.img /sdk/output/firmware/parameter.txt /sdk/output/firmware/rootfs.img /sdk/output/firmware/uboot.img .
++ rm -f update.img
++ '[' '' ']'
++ notice 'Generating package-file for update:'
++ rk_log 35 'Generating package-file for update:'
++ LOG_COLOR=35
++ shift
++ '[' 'Generating package-file for update:' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mGenerating package-file for update:\e[0m'
+[35mGenerating package-file for update:[0m
++ gen_package_file update
++ TYPE=update
++ PARAMETER=parameter.txt
++ PKG_FILE=package-file
++ '[' '!' -r parameter.txt ']'
++ echo -e '# NAME\tPATH'
++ echo -e 'package-file\tpackage-file'
++ echo -e 'parameter\tparameter.txt'
++ '[' update = template -o -r MiniLoaderAll.bin ']'
++ echo -e 'bootloader\tMiniLoaderAll.bin'
+++ rk_partition_parse_names parameter.txt
+++ rk_partition_parse parameter.txt
+++ PARAMETER=parameter.txt
+++ '[' '!' -r parameter.txt ']'
+++ grep -v '^<hidden> '
+++ cut '-d ' -f1
+++ xargs
++++ grep '^CMDLINE:' parameter.txt
++++ grep -o '0x.*'
+++ PARTS='0x00002000@0x00002000(uboot),0x00006000@0x00004000(boot),0x00067b00@0x00010000(rootfs),0x00007800@0x00077b00(config),-@0x0007f300(amp:grow)'
++++ echo '0x00002000@0x00002000(uboot),0x00006000@0x00004000(boot),0x00067b00@0x00010000(rootfs),0x00007800@0x00077b00(config),-@0x0007f300(amp:grow)'
++++ awk -F '[@():]' '{print $2}'
+++ echo '<hidden> 0x00002000'
+++ echo '0x00002000@0x00002000(uboot) 0x00006000@0x00004000(boot) 0x00067b00@0x00010000(rootfs) 0x00007800@0x00077b00(config) -@0x0007f300(amp:grow)'
+++ xargs -n 1
+++ awk -F '[@():]' '{print $3,$1}'
++ for part in $(rk_partition_parse_names "$PARAMETER")
++ echo uboot
++ grep -q '_b$'
++ case $part in
++ IMAGE=uboot.img
++ '[' update = template -o -r uboot.img ']'
++ echo -e 'uboot\tuboot.img'
++ for part in $(rk_partition_parse_names "$PARAMETER")
++ echo boot
++ grep -q '_b$'
++ case $part in
++ IMAGE=boot.img
++ '[' update = template -o -r boot.img ']'
++ echo -e 'boot\tboot.img'
++ for part in $(rk_partition_parse_names "$PARAMETER")
++ echo rootfs
++ grep -q '_b$'
++ case $part in
++ IMAGE=rootfs.img
++ '[' update = template -o -r rootfs.img ']'
++ echo -e 'rootfs\trootfs.img'
++ for part in $(rk_partition_parse_names "$PARAMETER")
++ echo config
++ grep -q '_b$'
++ case $part in
++ IMAGE=config.img
++ '[' update = template -o -r config.img ']'
++ for part in $(rk_partition_parse_names "$PARAMETER")
++ echo amp
++ grep -q '_b$'
++ case $part in
++ IMAGE=amp.img
++ '[' update = template -o -r amp.img ']'
++ cat package-file
+# NAME	PATH
+package-file	package-file
+parameter	parameter.txt
+bootloader	MiniLoaderAll.bin
+uboot	uboot.img
+boot	boot.img
+rootfs	rootfs.img
++ notice 'Packing /sdk/output/firmware/update.img for update...'
++ rk_log 35 'Packing /sdk/output/firmware/update.img for update...'
++ LOG_COLOR=35
++ shift
++ '[' 'Packing /sdk/output/firmware/update.img for update...' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mPacking /sdk/output/firmware/update.img for update...\e[0m'
+[35mPacking /sdk/output/firmware/update.img for update...[0m
++ '[' '!' -r MiniLoaderAll.bin ']'
+++ hexdump -s 21 -n 4 -e '4 "%c"' MiniLoaderAll.bin
+++ rev
++ TAG=RK350F
++ /sdk/tools/linux/Linux_Pack_Firmware/rockdev/afptool -pack ./ update.raw.img
+Android Firmware Package Tool v2.27
+------ PACKAGE ------
+Add file: ./package-file
+package-file,Add file: ./package-file done,offset=0x800,size=0x8b,userspace=0x1
+Add file: ./parameter.txt
+parameter,Add file: ./parameter.txt done,offset=0x1000,size=0x192,userspace=0x1,flash_address=0x00000000
+Add file: ./MiniLoaderAll.bin
+bootloader,Add file: ./MiniLoaderAll.bin done,offset=0x1800,size=0x419c0,userspace=0x84
+Add file: ./uboot.img
+uboot,Add file: ./uboot.img done,offset=0x43800,size=0x400000,userspace=0x800,flash_address=0x00002000
+Add file: ./boot.img
+boot,Add file: ./boot.img done,offset=0x443800,size=0x618800,userspace=0xc31,flash_address=0x00004000
+Add file: ./rootfs.img
+rootfs,Add file: ./rootfs.img done,offset=0xa5c000,size=0x76c0000,userspace=0xed80,flash_address=0x00010000
+Add CRC...
+Make firmware OK!
+------ OK ------
++ /sdk/tools/linux/Linux_Pack_Firmware/rockdev/rkImageMaker -RK350F MiniLoaderAll.bin update.raw.img update.img -os_type:androidos
+********rkImageMaker ver 2.23********
+Generating new image, please wait...
+Writing head info...
+Writing boot file...
+Writing firmware...
+Generating MD5 data...
+MD5 data generated successfully!
+New image generated successfully!
++ ln -rsf /sdk/output/update/Image/package-file /sdk/output/update
++ ln -rsf /sdk/output/update/Image/update.img /sdk/output/update
++ ln -rsf /sdk/output/update/Image/update.img /sdk/output/firmware/update.img
++ echo update
++ grep -wq ab
++ case "$TYPE" in
++ EDIT_CMD=edit-package-file
++ notice '\nRun '\''make edit-package-file'\'' if you want to change the package-file.\n'
++ rk_log 35 '\nRun '\''make edit-package-file'\'' if you want to change the package-file.\n'
++ LOG_COLOR=35
++ shift
++ '[' '\nRun '\''make edit-package-file'\'' if you want to change the package-file.\n' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35m\nRun '\''make edit-package-file'\'' if you want to change the package-file.\n\e[0m'
+[35m
+Run 'make edit-package-file' if you want to change the package-file.
+[0m
++ finish_build
+++ basename /sdk/device/rockchip/common/scripts/mk-updateimg.sh
++ notice 'Running mk-updateimg.sh - build_updateimg succeeded.'
++ rk_log 35 'Running mk-updateimg.sh - build_updateimg succeeded.'
++ LOG_COLOR=35
++ shift
++ '[' 'Running mk-updateimg.sh - build_updateimg succeeded.' = -n ']'
++ LOG_FLAG=-e
++ echo -e '\e[35mRunning mk-updateimg.sh - build_updateimg succeeded.\e[0m'
+[35mRunning mk-updateimg.sh - build_updateimg succeeded.[0m
++ cd /sdk
+++ message 'Images under /sdk/output/firmware/ are ready!'
+++ rk_log 36 'Images under /sdk/output/firmware/ are ready!'
+++ LOG_COLOR=36
+++ shift
+++ '[' 'Images under /sdk/output/firmware/ are ready!' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[36mImages under /sdk/output/firmware/ are ready!\e[0m'
+[36mImages under /sdk/output/firmware/ are ready![0m
+++ finish_build
++++ basename /sdk/device/rockchip/common/build-hooks/80-firmware.sh
+++ notice 'Running 80-firmware.sh - build_firmware succeeded.'
+++ rk_log 35 'Running 80-firmware.sh - build_firmware succeeded.'
+++ LOG_COLOR=35
+++ shift
+++ '[' 'Running 80-firmware.sh - build_firmware succeeded.' = -n ']'
+++ LOG_FLAG=-e
+++ echo -e '\e[35mRunning 80-firmware.sh - build_firmware succeeded.\e[0m'
+[35mRunning 80-firmware.sh - build_firmware succeeded.[0m
+++ cd /sdk
+++ FUNC_RET=0
+++ '[' 0 -ne 0 ']'
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo updateimg
++++ grep -E '^firmware(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ for opt in $OPTS
+++ for cmd in $CMDS
++++ echo default
++++ grep -E '^firmware(:|$)'
++++ tr : ' '
+++ ARGS=
+++ '[' '' ']'
+++ continue
+++ exit 0
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/90-updateimg.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/90-updateimg.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-updateimg.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-updateimg.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' updateimg ota-updateimg'
++ echo ' updateimg ota-updateimg'
++ grep -wq default
++ option_check ' updateimg ota-updateimg' firmware
++ CMDS=' updateimg ota-updateimg'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^updateimg$'
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^ota-updateimg$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/99-all.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/99-all.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-all.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-all.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=' release'
++ echo ' release'
++ grep -wq default
++ option_check ' release' firmware
++ CMDS=' release'
++ shift
++ for opt in $@
++ for cmd in $CMDS
++ echo firmware
++ grep -qE '^release$'
++ return 1
++ continue
++ for hook in $(find "$dir" -maxdepth 1 -name "*.sh" | sort)
++ hook_check /sdk/device/rockchip/common/build-hooks/9999-shell.sh post-build firmware
++ case "$2" in
+++ realpath /sdk/device/rockchip/common/build-hooks/9999-shell.sh --relative-to /sdk
++ SCRIPT=device/rockchip/common/scripts/mk-shell.sh
+++ sed -n 's@^RK_post_build_CMDS[^ ]*\(.*\)" # device/rockchip/common/scripts/mk-shell.sh$@\1@ip' /sdk/output/.parsed_cmds
++ CMDS=
++ echo ''
++ grep -wq default
++ option_check '' firmware
++ CMDS=
++ shift
++ for opt in $@
++ return 1
++ continue
++ HOOK_RET=0
++ '[' 0 -ne 0 ']'

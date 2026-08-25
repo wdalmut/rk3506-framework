@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Luckfox Lyra Plus (RK3506G2) — variante initramfs per il bring-up.
+ *
+ * Derivato da arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dts del kernel
+ * vendor (Copyright (c) 2024 Rockchip Electronics Co., Ltd).
+ *
+ * Unica differenza sostanziale: i bootargs. Il rootfs e' incorporato nel
+ * kernel come initramfs (CONFIG_INITRAMFS_SOURCE, impostato da Buildroot
+ * quando BR2_TARGET_ROOTFS_INITRAMFS=y), quindi non c'e' nessun root da
+ * montare: via `root=`, `rootfstype=`, `rootwait` e `ubi.mtd=`.
+ *
+ * Perche' un DTS separato invece di riusare quello in-tree: con un
+ * initramfs incorporato il kernel esegue /init e non arriva mai a
+ * prepare_namespace(), quindi il `root=ubi0:rootfs` del DTS vendor sarebbe
+ * innocuo — ma `ubi.mtd=2` farebbe comunque attaccare la UBI in fase di
+ * boot. In bring-up si vuole escludere lo storage dall'equazione: se la
+ * board arriva alla shell con questa immagine, NAND e UBI non c'entrano.
+ *
+ * Buildroot lo copia in arch/arm/boot/dts/ prima della build
+ * (BR2_LINUX_KERNEL_CUSTOM_DTS_PATH), percio' gli #include relativi al
+ * kernel vendor si risolvono.
+ */
+
+/dts-v1/;
+
+#include "rk3506-luckfox-lyra.dtsi"
+
+/ {
+	model = "Luckfox Lyra Plus (initramfs)";
+	compatible = "rockchip,rk3506g-demo-display-control", "rockchip,rk3506";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32,0xff0a0000 console=ttyFIQ0 snd_aloop.index=7 snd_aloop.use_raw_jiffies=1";
+	};
+};
+
+/**********ethernet**********/
+&gmac1 {
+	phy-mode = "rmii";
+	clock_in_out = "output";
+
+	snps,reset-gpio = <&gpio1 RK_PD0 GPIO_ACTIVE_LOW>;
+	snps,reset-active-low;
+	snps,reset-delays-us = <0 20000 100000>;
+
+	pinctrl-names = "default";
+	pinctrl-0 = <&eth_rmii1_miim_pins &eth_rmii1_tx_bus2_pins &eth_rmii1_rx_bus2_pins &eth_rmii1_clk_pins>;
+
+	phy-handle = <&rmii_phy1>;
+	status = "okay";
+};
+
+&mdio1 {
+	rmii_phy1: phy@1 {
+		compatible = "ethernet-phy-ieee802.3-c22";
+		reg = <0x1>;
+	};
+};
+
+/**********usb**********/
+&usb20_otg0 {
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+&usb20_otg1 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+/*
+ * Display: i nodi &dsi / &dsi_dphy / &dsi_in_vop / &route_dsi del DTS vendor
+ * NON sono abilitati qui, in coerenza con board/lyra-plus/linux.config che
+ * non applica rk3506-display.config. Anche &cma resta al default del dtsi
+ * (il vendor lo alzava a 32 MiB per il VOP): su un initramfs quella memoria
+ * serve piu' al rootfs in RAM che a un framebuffer che non usiamo.
+ */

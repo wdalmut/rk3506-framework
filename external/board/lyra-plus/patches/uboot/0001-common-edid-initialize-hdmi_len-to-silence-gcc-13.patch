@@ -1,0 +1,31 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 1/2] common: edid: initialize hdmi_len to silence gcc >= 13
+
+U-Boot 2017.09 e' del 2017 e non e' mai stata compilata con gcc 13, che
+qui produce un falso positivo fatale (il BSP compila con -Werror):
+
+  common/edid.c:2934:17: error: 'hdmi_len' may be used uninitialized
+                                [-Werror=maybe-uninitialized]
+
+In add_cea_modes() 'hdmi' e 'hdmi_len' vengono assegnati insieme, nello
+stesso ramo del ciclo, e 'hdmi_len' viene letto solo se 'hdmi' non e'
+NULL. L'invariante e' rispettata, ma gcc 13 non riesce a correlare le due
+variabili e assume il caso peggiore.
+
+Nessun cambio di comportamento: 'hdmi_len' viene comunque sovrascritto
+prima di ogni uso reale.
+
+L'alternativa sarebbe disattivare -Werror per U-Boot, ma nasconderebbe
+anche i warning veri.
+
+--- a/common/edid.c	2026-08-24 15:32:04.503548093 +0200
++++ b/common/edid.c	2026-08-24 15:32:04.512923198 +0200
+@@ -3579,7 +3579,7 @@
+ {
+ 	const u8 *cea = drm_find_cea_extension(edid);
+ 	const u8 *db, *hdmi = NULL, *video = NULL;
+-	u8 dbl, hdmi_len, video_len = 0;
++	u8 dbl, hdmi_len = 0, video_len = 0;
+ 	int modes = 0;
+ 
+ 	if (cea && cea_revision(cea) >= 3) {

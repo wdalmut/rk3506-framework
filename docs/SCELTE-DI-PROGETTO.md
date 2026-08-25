@@ -64,7 +64,7 @@ un blob vendor (RGA, rockit, wifibt). Il vendor stesso usa glibc
 la conseguenza. Il defconfig fissa esplicitamente solo
 `BR2_ARM_FPU_NEON_VFPV4`. GCC e' pinnato a **13.x**, la piu' vecchia
 disponibile in 2026.02.3: U-Boot 2017.09 e' del 2017 e piu' il compilatore e'
-recente piu' aumenta il rischio (vedi TODO-9).
+recente piu' aumenta il rischio.
 
 ## Nessuna patch a Buildroot
 
@@ -129,7 +129,7 @@ sull'host senza python2 la build si ferma esattamente li' (verificato).
 Il checkout SDK di riferimento aveva modifiche locali che accendono l'AMP
 (RT-Thread sul terzo core A7, partizioni `config` e `amp`, `amp_miranda.its`).
 Questo albero parte dal **baseline vendor**: solo Linux, partizioni
-`uboot`/`boot`/`rootfs`. Vedi TODO-8.
+`uboot`/`boot`/`rootfs`.
 
 ---
 

@@ -16,7 +16,7 @@ I binari vendor che servono alla build stanno nel submodule `vendor/`.
 |---|---|
 | SoC | Rockchip **RK3506G2**, triple Cortex-A7, ARMv7-A 32-bit |
 | Storage | SPI NAND **256 MiB**, page 2048 B, erase block 128 KiB |
-| DDR | 128 MiB (da confermare, vedi *Aperti*) |
+| DDR | **128 MiB** (misurata: `/proc/device-tree/memory/reg` = base `0x0`, size `0x08000000`) |
 | Console | `ttyFIQ0` su UART0 `0xff0a0000`, **1500000** 8N1 |
 | Kernel | vendor 6.1.99 — `github.com/wdalmut/rk3506-kernel` @ `73bca17b6793…` |
 | U-Boot | vendor 2017.09 — `github.com/wdalmut/rk3506-uboot` @ `1625f78b6dcf…` |
@@ -197,7 +197,7 @@ CREATE_IDB=true
 * **SD / eMMC: settore 64 (32 KiB).** Verificato in `$SDK/flash.sh`:
   `info "scrivo idbloader al settore 64"` / `dd if="$IDB" of="$DEV" seek=64`.
   (Script locale, ma coerente con la convenzione Rockchip.)
-* **SPI NAND: ancora da accertare** (vedi *Aperti*, punto 2). Fatto certo: in
+* **SPI NAND: ancora da accertare** (vedi *Aperti*, punto 1). Fatto certo: in
   `parameter-lyra-spinand.txt` i primi **4 MiB** (`0x0`–`0x2000` settori) non
   sono assegnati ad alcuna partizione, cioè sono l'area riservata a
   loader/IDB. Il posizionamento effettivo dentro quell'area lo decide
@@ -304,22 +304,42 @@ utilizzabili come memoria normale, e il CMA sarebbe innocuo. Con `CmaFree = 0`
 non lo sono: nessuno li sta usando (non c'è display) ma non sono nemmeno
 disponibili.
 
-I conti tornano con l'ipotesi "riservati e mai restituiti al sistema": se la
-board monta 128 MiB di DDR,
+I conti tornano con l'ipotesi "riservati e mai restituiti al sistema":
 
-    128.000 MiB  DDR
+    128.000 MiB  DDR      <- misurata, vedi sotto
    - 32.000 MiB  CMA
    -  ~8.9 MiB   kernel, page table, mem_map, trust@0, ramoops
    ------------
      87.1  MiB   = MemTotal misurato
 
-`TODO(verify):` la DDR è davvero 128 MiB? Il dato definitivo è la riga che il
-kernel stampa al boot, che dà totale e ripartizione in un colpo solo:
+**I 128 MiB sono verificati sulla board**, non dedotti:
 
 ```
-dmesg | grep -i '^\[.*\] Memory:'
-# es. Memory: 89216K/131072K available (... reserved, 32768K cma-reserved)
+# od -An -tx1 /proc/device-tree/memory/reg
+ 00 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00
 ```
+
+Con `#address-cells = <1>` e `#size-cells = <1>` (`rk3502.dtsi:15-16`) l'entry
+e' base `0x00000000` + size `0x08000000` = **128 MiB**; gli zeri che seguono
+sono i bank DRAM inutilizzati, azzerati da U-Boot.
+
+Quel nodo e' la fonte giusta, migliore di `dmesg`, per due ragioni. La prima:
+nella catena DTS della Lyra Plus **non esiste alcun nodo `memory`** (zero
+occorrenze di `device_type = "memory"` in `rk3502.dtsi` e in
+`rk3506g-luckfox-lyra-plus.dts`), quindi il valore non e' una dichiarazione
+statica ma la dimensione che il blob DDR ha **misurato** all'accensione. La
+catena e' tracciabile: il ddrbin pubblica il risultato del training nell'atag
+`ATAG_DDR_MEM`, e l'SPL di U-Boot lo rilegge e lo riversa nel DTB del kernel
+(`arch/arm/mach-rockchip/spl.c:494-509` → `fdt_fixup_memory_banks`). Leggere
+quel nodo equivale a chiedere al blob DDR quanta RAM ha trovato. La seconda: la riga `Memory: …K/…K available`
+il kernel la stampa a `[0.000000]`, e su questa board il ring buffer ha gia'
+girato quando si arriva alla shell — un `dmesg` a sistema avviato parte da
+`[1.58…]` e quella riga non c'e' piu'. Il DT invece resta leggibile sempre.
+
+Attenzione a non confondere le fonti: `free` e `MemTotal` danno 89216 kB, cioe'
+quello che **resta** dopo CMA e regioni riservate. Non rispondono alla domanda
+"quanta DDR c'e' sul chip": sono il punto di partenza del conto, non la sua
+verifica.
 
 ### Decisione: si tengono
 
@@ -346,6 +366,5 @@ Conseguenza pratica da conoscere: su questa base `MemTotal` è 87,1 MiB e
 
 | # | Criticita' | Cosa manca |
 |---|-----------|------------|
-| 1 | 🟡 | Quanta DDR monta la board. I conti tornano con 128 MiB, ma non è misurato. Una riga: `dmesg \| grep -i 'Memory:'`. Serve a sapere quanto si recupera togliendo il CMA in fase di target. |
-| 2 | 🟡 | A quale offset il BootROM RK3506 cerca l'IDB su **SPI NAND**. Accertato solo che i primi 4 MiB sono riservati e che su SD/eMMC e' il settore 64. Blocca `flash.img` come immagine avviabile, non il flash via `update.img`. |
-| 3 | 🟢 | I 640 KiB (5 blocchi) di coda non coperti da `mtdparts`. Non e' il vendor storage, che sta a offset 0 e occupa 64 KiB (`vendor.c:42,47`). Lo 0.25% del chip: curiosita'. |
+| 1 | 🟡 | A quale offset il BootROM RK3506 cerca l'IDB su **SPI NAND**. Accertato solo che i primi 4 MiB sono riservati e che su SD/eMMC e' il settore 64. Blocca `flash.img` come immagine avviabile, non il flash via `update.img`. |
+| 2 | 🟢 | I 640 KiB (5 blocchi) di coda non coperti da `mtdparts`. Non e' il vendor storage, che sta a offset 0 e occupa 64 KiB (`vendor.c:42,47`). Lo 0.25% del chip: curiosita'. |

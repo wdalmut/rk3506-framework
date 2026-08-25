@@ -423,7 +423,7 @@ Immagine raw dei 256 MiB, con ogni partizione al suo offset. Serve per un
 programmatore NAND esterno o per ispezionare il layout senza board. **Non e'
 avviabile cosi' com'e'**: i primi 4 MiB (area loader/IDB) sono vuoti, perche'
 l'offset a cui il BootROM RK3506 cerca l'IDB su SPI NAND non e' ancora
-accertato — vedi [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md), TODO-4.
+accertato — vedi [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md), sezione *Aperti*.
 
 ---
 
@@ -455,10 +455,9 @@ screen /dev/ttyUSB0 1500000
 `BR2_TARGET_GENERIC_GETTY_PORT="ttyFIQ0"` e lascia il baudrate a *keep*: la
 velocita' la fissa il driver, getty non deve toccarla.
 
-> Su quale pettine della Lyra Plus escano fisicamente quei pin resta da
-> confermare ([BOARD-FACTS](docs/BOARD-FACTS.md), TODO-6): lo script `flash.sh`
-> dell'SDK parla di "UART2", ma il
-> DTS dice `serial-id = <0>`. Il baudrate e' invece certo.
+> Su quale pettine della Lyra Plus escano fisicamente quei pin non e'
+> ricavabile dall'SDK: lo script `flash.sh` parla di "UART2", ma il DTS dice
+> `serial-id = <0>`. Il baudrate e la periferica sono invece certi.
 
 ---
 
@@ -555,8 +554,8 @@ Le righe che valgono davvero come verifica sono tre:
 - **`Modello: Luckfox Lyra Plus`** — arriva da `/proc/device-tree/model`, cioe'
   il DTB dentro `boot.img` e' quello giusto. Se qui compare un altro modello,
   `BR2_LINUX_KERNEL_INTREE_DTS_NAME` non e' quello che si crede.
-- **`MemTotal`** — se la RAM e' molto meno del previsto, il blob DDR non ha
-  fatto il suo lavoro. E' il primo posto dove guardare quando il boot e'
+- **`MemTotal`** — la board monta 128 MiB di DDR; se la RAM e' molto meno del
+  previsto, il blob DDR non ha fatto il suo lavoro. E' il primo posto dove guardare quando il boot e'
   instabile. Attenzione pero': **87,1 MiB e' il valore normale su questa
   base**, non un sintomo. Mancano i 32 MiB di CMA riservati al display, che
   sono tenuti apposta — vedi [Display e i 32 MiB di CMA](#display-e-i-32-mib-di-cma).
@@ -564,10 +563,9 @@ Le righe che valgono davvero come verifica sono tre:
   non c'e' nessuna partizione, `mtdparts=` non e' arrivato al kernel: il DTB e'
   sbagliato o U-Boot ha sovrascritto il bootargs.
 
-I valori numerici sopra (MemTotal, uptime, date) sono ovviamente indicativi;
-I valori numerici sopra sono indicativi; per quelli reali di questa board vedi
-[BOARD-FACTS](docs/BOARD-FACTS.md), TODO-5, sulla dimensione
-effettiva di RAM e NAND.
+I valori numerici sopra (MemTotal, uptime, data) sono indicativi; quelli
+misurati su questa board — 128 MiB di DDR, NAND da 256 MiB — stanno nella
+tabella d'identita' di [BOARD-FACTS](docs/BOARD-FACTS.md).
 
 Con la variante initramfs, `/proc/mtd` puo' essere vuoto o assente: e'
 previsto, il rootfs non sta su NAND.

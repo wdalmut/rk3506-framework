@@ -29,8 +29,62 @@ Questo README copre **come costruire e usare** il repository. Il resto sta in
 | [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh) | Ricostruisce i mirror di kernel e U-Boot da un checkout SDK shallow. |
 | [docs/traces/](docs/traces/) | I trace di `build.sh` dell'SDK da cui e' stata ricostruita la catena di packaging. BOARD-FACTS li cita per numero di riga. |
 
+## Partire da questo template
+
+Questo repository e' un **template GitHub**: "Use this template" crea un nuovo
+progetto con tutti i file e una storia nuova. E' pensato per far partire un
+altro progetto **sulla stessa Luckfox Lyra Plus**, quindi tutto cio' che
+riguarda la board — `parameter.txt`, `boot.its`, il DTS, gli SHA di kernel e
+U-Boot, `docs/BOARD-FACTS.md`, i trace — va **tenuto**: e' gia' verificato su
+hardware e non va rifatto.
+
+Cosa cambiare, in ordine di importanza:
+
+1. **La password di root.** `BR2_TARGET_GENERIC_ROOT_PASSWD="lyra"` nei due
+   defconfig. Va bene per il bring-up, **non** per qualcosa che esce
+   dall'ufficio: ogni progetto creato da questo template nascerebbe con la
+   stessa password nota. Cambiala subito, o metti
+   `# BR2_TARGET_ENABLE_ROOT_LOGIN is not set` se il progetto non ha bisogno
+   di login da seriale.
+2. **Nome e identita' del progetto**: titolo di questo README,
+   `BR2_TARGET_GENERIC_HOSTNAME` e `BR2_TARGET_GENERIC_ISSUE` nei defconfig.
+3. **La tua applicazione**, accanto a `hello-lyra`: copia
+   `external/package/hello-lyra/` come punto di partenza, e aggiungi il tuo
+   `source` in `external/Config.in`.
+
+Cosa **non** cambiare:
+
+- **`hello-lyra` conviene tenerla.** Non e' un esempio da buttare: e' la
+  diagnostica che ha chiuso due TODO aperti su questa board, leggendo modello,
+  memoria, CMA e partizioni MTD. Su un progetto nuovo e' la prima cosa da
+  lanciare quando qualcosa non parte, e costa 1,7 MB.
+- `docs/BOARD-FACTS.md` e `docs/traces/`: sono i fatti misurati di questa
+  board, con la fonte di ogni valore. Riscriverli da zero sarebbe rifare la
+  ricognizione.
+
+Se un giorno serve portare **un'altra board Rockchip** e non un altro progetto
+sulla stessa, il lavoro e' diverso: `post-image.sh` ha `RK3506MINIALL.ini`,
+`RK3506TOS.ini` e `rk3506_ddr_750MHz_v1.04.bin` scritti dentro, e
+`BOARD-FACTS.md` andrebbe svuotato e rifatto. Conviene partire da un template
+dedicato, non da qui.
+
+### Controlli automatici
+
+`.github/workflows/checks.yml` verifica a ogni push cio' che si rompe in
+silenzio: che `savedefconfig` non generi diff, che la toolchain resti glibc e
+non scivoli su uClibc, che gli script siano validi ed eseguibili, che
+`hello-lyra` passi `gofmt`/`vet` e cross-compili ARMv7 statico, e che non ci
+siano link morti fra i documenti.
+
+**Non** c'e' una build completa, e non e' una dimenticanza: servirebbe `rkbin`,
+che non e' pubblico. Per la stessa ragione `docs/check-artifacts.sh` non gira
+in CI — senza build non ci sono artefatti — e resta un comando da lanciare a
+mano dopo aver alzato uno SHA o toccato `post-image.sh`.
+
+
 ## Indice
 
+- [Partire da questo template](#partire-da-questo-template)
 - [Struttura](#struttura)
 - [Prerequisiti](#prerequisiti)
 - [Build](#build)

@@ -10,3 +10,6 @@
 # trasformerebbe quelle citazioni in riferimenti morti. Sono ~450 KB e vanno
 # considerati prova congelata: se rigeneri i trace, i numeri di riga nei
 # documenti vanno riverificati.
+
+# Output dei job di CI eseguiti in locale
+/out-*_defconfig/

@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
+# Controlli che si possono fare senza hardware e senza l'SDK Luckfox.
+#
+# NON c'e' una build completa, e non e' una dimenticanza: servirebbe rkbin
+# (blob DDR, boot_merger, mkimage, OP-TEE), che non e' pubblico. Per la stessa
+# ragione qui non gira docs/check-artifacts.sh: senza build non ci sono
+# artefatti da controllare. Quello resta un comando da lanciare a mano dopo
+# aver alzato uno SHA o toccato post-image.sh.
+#
+# Quello che invece si puo' verificare in CI e' tutto cio' che si rompe in
+# silenzio: un defconfig che non e' piu' canonico, uno script con un errore di
+# sintassi, un link morto fra i documenti.
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  defconfig:
+    # Il criterio di accettazione 2: `make savedefconfig` non deve generare
+    # diff. Se lo genera, qualcuno ha modificato un defconfig a mano senza
+    # rigenerarlo, e la prossima persona che lancia savedefconfig si trova un
+    # diff spurio da spiegare.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: dipendenze di kconfig
+        run: sudo apt-get update && sudo apt-get install -y build-essential libncurses-dev
+      - name: savedefconfig non genera diff
+        run: |
+          set -euo pipefail
+          for d in external/configs/*_defconfig; do
+            name="$(basename "$d")"
+            echo "::group::$name"
+            make -C buildroot O="$PWD/out-$name" BR2_EXTERNAL="$PWD/external" "$name"
+            make -C buildroot O="$PWD/out-$name" BR2_EXTERNAL="$PWD/external" savedefconfig
+            echo "::endgroup::"
+          done
+          git diff --exit-code external/configs/
+      - name: la toolchain resta glibc, non uClibc
+        # Regressione vera, gia' successa: senza
+        # BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_1 glibc sparisce dalla choice
+        # e Kconfig ripiega su uClibc in silenzio. Vedi docs/SCELTE-DI-PROGETTO.md.
+        run: |
+          set -euo pipefail
+          for d in external/configs/*_defconfig; do
+            name="$(basename "$d")"
+            libc="$(sed -n 's/^BR2_TOOLCHAIN_BUILDROOT_LIBC="\(.*\)"$/\1/p' "out-$name/.config")"
+            echo "$name -> $libc"
+            [ "$libc" = glibc ] || { echo "::error::$name usa $libc invece di glibc"; exit 1; }
+          done
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: sintassi degli script
+        run: |
+          set -euo pipefail
+          for f in setup.sh docs/*.sh external/board/*/post-*.sh; do
+            bash -n "$f" && echo "ok  $f"
+          done
+          # gli init script devono essere POSIX sh: li esegue BusyBox ash
+          for f in external/board/*/rootfs_overlay/etc/init.d/S*; do
+            sh -n "$f" && echo "ok  $f (posix sh)"
+          done
+      - name: shellcheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck -S warning setup.sh docs/*.sh external/board/*/post-*.sh || true
+      - name: gli script sono eseguibili
+        # Se S99hello perde il bit +x l'applicazione non parte al boot, e
+        # sembra un problema del porting.
+        run: |
+          set -euo pipefail
+          for f in setup.sh docs/*.sh external/board/*/post-*.sh \
+                   external/board/*/rootfs_overlay/etc/init.d/S*; do
+            [ -x "$f" ] || { echo "::error::$f non e' eseguibile"; exit 1; }
+          done
+          echo "tutti eseguibili"
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: 'stable' }
+      - name: gofmt, vet e cross-compile ARMv7
+        working-directory: external/package/hello-lyra/src
+        run: |
+          set -euo pipefail
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::gofmt"; exit 1; }
+          go vet ./...
+          # Le stesse impostazioni che usa Buildroot: ARMv7 hard-float, no CGO.
+          GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -o /tmp/hello-lyra .
+          file /tmp/hello-lyra | grep -q 'ARM' || { echo "::error::non e' un binario ARM"; exit 1; }
+          file /tmp/hello-lyra | grep -q 'statically linked' \
+            || { echo "::error::non e' statico: CGO_ENABLED=0 non ha avuto effetto"; exit 1; }
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: nessun link morto fra i documenti
+        run: |
+          set -euo pipefail
+          rc=0
+          for f in README.md docs/*.md; do
+            dir="$(dirname "$f")"
+            grep -ohE '\]\([^)#]+(#[^)]*)?\)' "$f" | sed 's/^](//; s/)$//; s/#.*//' | while read -r l; do
+              case "$l" in http*|"") continue;; esac
+              [ -e "$dir/$l" ] || { echo "::error file=$f::link morto: $l"; exit 1; }
+            done || rc=1
+          done
+          exit $rc

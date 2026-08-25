@@ -1,0 +1,127 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
+# S45adb — gadget USB con la sola funzione ADB, via configfs.
+#
+# Sostituisce /usr/bin/usbdevice di rkscript (725 righe, gestisce adb, rndis,
+# ums, mtp, uvc, ntb, hid...) con le ~40 righe che servono a questa board.
+# Il binario adbd viene da Buildroot upstream (BR2_PACKAGE_ANDROID_TOOLS_ADBD),
+# non dal package android-adbd aggiunto dal vendor.
+#
+# Il kernel ha gia' tutto, dal defconfig vendor:
+#     CONFIG_USB_DWC2=y  CONFIG_USB_GADGET=y  CONFIG_CONFIGFS_FS=y
+#     CONFIG_USB_CONFIGFS=y  CONFIG_USB_CONFIGFS_F_FS=y
+# e il DTS mette usb20_otg0 in dr_mode = "peripheral".
+#
+# ORDINE DELLE OPERAZIONI: NON E' ARBITRARIO
+# Con functionfs il demone in user space deve scrivere i descrittori su ep0
+# *prima* che il gadget venga legato all'UDC. Se si scrive su UDC troppo
+# presto, la funzione non e' pronta e il bind fallisce (o il device enumera
+# senza endpoint). La sequenza corretta, la stessa di usbdevice e di Android:
+#
+#     1. crea il gadget e la funzione ffs.adb
+#     2. monta functionfs
+#     3. avvia adbd, che apre ep0 e ci scrive i descrittori
+#     4. ASPETTA che sia pronto (compaiono ep1/ep2)
+#     5. collega la funzione alla config
+#     6. solo ora: echo <udc> > UDC
+#
+# VID/PID: 0x2207 e' Rockchip, 0x0006 e' la convenzione per il solo ADB
+# (rkscript/usbdevice, funzione usb_pid). Usare gli stessi valori significa
+# che le regole udev gia' presenti sull'host continuano a funzionare.
+
+NAME=adb
+GADGET=/sys/kernel/config/usb_gadget/lyra
+FFS=/dev/usb-ffs/adb
+CONFIGFS=/sys/kernel/config
+ADBD=/usr/bin/adbd
+
+USB_VID=0x2207
+USB_PID=0x0006
+
+start() {
+	[ -x "$ADBD" ] || { echo "S45adb: $ADBD assente, salto"; return 0; }
+
+	UDC="$(ls /sys/class/udc/ 2>/dev/null | head -n 1)"
+	if [ -z "$UDC" ]; then
+		echo "S45adb: nessun UDC in /sys/class/udc/, gadget non configurabile"
+		echo "S45adb: la porta OTG0 e' in dr_mode=peripheral nel DTS?"
+		return 1
+	fi
+
+	mountpoint -q "$CONFIGFS" || mount -t configfs none "$CONFIGFS" || return 1
+
+	# 1. gadget e funzione
+	mkdir -p "$GADGET" || return 1
+	echo "$USB_VID" > "$GADGET/idVendor"
+	echo "$USB_PID" > "$GADGET/idProduct"
+
+	mkdir -p "$GADGET/strings/0x409"
+	# Il seriale finisce in `adb devices`: prenderlo dal device tree
+	# distingue due board identiche sulla stessa scrivania.
+	SERIAL="$(tr -d '\0' < /proc/device-tree/serial-number 2>/dev/null)"
+	echo "${SERIAL:-lyra-plus}" > "$GADGET/strings/0x409/serialnumber"
+	echo "Corley"              > "$GADGET/strings/0x409/manufacturer"
+	echo "Luckfox Lyra Plus"   > "$GADGET/strings/0x409/product"
+
+	mkdir -p "$GADGET/configs/b.1/strings/0x409"
+	echo "adb" > "$GADGET/configs/b.1/strings/0x409/configuration"
+	echo 500   > "$GADGET/configs/b.1/MaxPower"
+
+	mkdir -p "$GADGET/functions/ffs.adb"
+
+	# 2. functionfs. Il nome del mount ("adb") deve combaciare con il
+	#    suffisso della funzione (ffs.adb), altrimenti il kernel non le
+	#    associa.
+	mkdir -p "$FFS"
+	mountpoint -q "$FFS" || mount -t functionfs adb "$FFS" || return 1
+
+	# 3. adbd scrive i descrittori su ep0
+	start-stop-daemon -S -q -b -x "$ADBD" -- || return 1
+
+	# 4. attesa: ep1 compare solo dopo che i descrittori sono stati scritti
+	i=0
+	while [ ! -e "$FFS/ep1" ] && [ $i -lt 200 ]; do
+		i=$((i + 1))
+		usleep 10000 2>/dev/null || sleep 1
+	done
+	if [ ! -e "$FFS/ep1" ]; then
+		echo "S45adb: adbd non ha scritto i descrittori su ep0, non lego l'UDC"
+		start-stop-daemon -K -q -x "$ADBD" 2>/dev/null
+		return 1
+	fi
+
+	# 5. la funzione entra nella config solo ora
+	ln -sf "$GADGET/functions/ffs.adb" "$GADGET/configs/b.1/f1" 2>/dev/null
+
+	# 6. bind
+	echo "$UDC" > "$GADGET/UDC" || return 1
+
+	echo "S45adb: gadget ADB attivo su $UDC (${USB_VID}:${USB_PID})"
+}
+
+stop() {
+	[ -d "$GADGET" ] || return 0
+	# Slegare l'UDC prima di smontare, altrimenti il kernel tiene i riferimenti.
+	echo "" > "$GADGET/UDC" 2>/dev/null
+	start-stop-daemon -K -q -x "$ADBD" 2>/dev/null
+	rm -f "$GADGET/configs/b.1/f1"
+	mountpoint -q "$FFS" && umount "$FFS"
+	# configfs si smonta solo a rovescio: prima le sotto-directory.
+	rmdir "$GADGET/functions/ffs.adb"           2>/dev/null
+	rmdir "$GADGET/configs/b.1/strings/0x409"   2>/dev/null
+	rmdir "$GADGET/configs/b.1"                 2>/dev/null
+	rmdir "$GADGET/strings/0x409"               2>/dev/null
+	rmdir "$GADGET"                             2>/dev/null
+}
+
+case "$1" in
+	start)   start ;;
+	stop)    stop ;;
+	restart|reload) stop; start ;;
+	*) echo "Uso: $0 {start|stop|restart}"; exit 1 ;;
+esac
+
+exit $?

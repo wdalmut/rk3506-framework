@@ -23,6 +23,7 @@ all'avvio stampa cosa il sistema vede davvero.
 - [Build](#build)
 - [Flash](#flash)
 - [Console seriale](#console-seriale)
+- [Accesso via USB (adb)](#accesso-via-usb-adb)
 - [Output atteso a boot riuscito](#output-atteso-a-boot-riuscito)
 - [Verificare che post-image.sh produca gli stessi artefatti dell'SDK](#verificare-che-post-imagesh-produca-gli-stessi-artefatti-dellsdk)
 - [Scelte di progetto](#scelte-di-progetto)
@@ -60,7 +61,7 @@ all'avvio stampa cosa il sistema vede davvero.
     │   ├── genimage.cfg          flash.img, immagine raw full-chip
     │   ├── post-build.sh         ritocchi al rootfs
     │   ├── post-image.sh         **la catena di packaging Rockchip**
-    │   └── rootfs_overlay/       /etc/init.d/S99hello
+    │   └── rootfs_overlay/       /etc/init.d/{S45adb,S99hello}
     └── package/hello-lyra/       applicazione Go di verifica
 ```
 
@@ -287,6 +288,82 @@ velocita' la fissa il driver, getty non deve toccarla.
 
 ---
 
+## Accesso via USB (adb)
+
+Oltre alla seriale la board espone un **gadget USB ADB**, cosi' si puo'
+iterare senza riflashare:
+
+```bash
+adb devices          # atteso: <seriale>  device
+adb shell
+adb push output/target/usr/bin/hello-lyra /usr/bin/    # ricompila e prova
+```
+
+Collegare la USB-C alla porta **OTG0** (quella che il DTS mette in
+`dr_mode = "peripheral"`), non a OTG1 che e' host.
+
+| | |
+|---|---|
+| VID:PID | `2207:0006` |
+| Funzione | `ffs.adb` via configfs |
+| Script | `/etc/init.d/S45adb` |
+| Binario | `/usr/bin/adbd`, da `BR2_PACKAGE_ANDROID_TOOLS_ADBD` upstream |
+
+`2207` e' Rockchip e `0006` e' la convenzione per il solo ADB (la stessa
+tabella di `usb_pid()` in `rkscript/usbdevice`), quindi eventuali regole udev
+gia' presenti sull'host continuano a funzionare. Se `adb devices` mostra
+`no permissions`:
+
+```bash
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="2207", MODE="0666", GROUP="plugdev"' \
+    | sudo tee /etc/udev/rules.d/51-rockchip.rules
+sudo udevadm control --reload-rules
+```
+
+Se il device non enumera, la diagnosi si fa dalla seriale:
+
+```
+/etc/init.d/S45adb restart      # rilancia e stampa l'errore
+ls /sys/class/udc/              # atteso: ff740000.usb (OTG0, usb@ff740000 nel DTS)
+ls /dev/usb-ffs/adb/            # dopo l'avvio devono esserci ep0 ep1 ep2
+```
+
+Se ci sono `ep1`/`ep2` ma il gadget non enumera, il problema e' a valle
+(cavo, porta, host). Se c'e' solo `ep0`, adbd non ha scritto i descrittori e
+`S45adb` non lega l'UDC apposta — vedi sotto.
+
+### Perche' non usiamo `usbdevice` dell'SDK
+
+`rkscript` installa `/usr/bin/usbdevice`, **725 righe** che gestiscono adb,
+rndis, ums, mtp, ptp, uvc, ntb, hid e midi. Tirarlo dentro significherebbe
+portare nell'external tree un package vendor intero per usarne un decimo.
+`S45adb` fa la stessa cosa per il caso che ci serve in ~40 righe leggibili.
+
+Un dettaglio che non e' opzionale, e che e' il motivo per cui lo script e'
+piu' lungo di quanto sembrerebbe necessario: **con functionfs l'ordine
+conta.** Il demone in user space deve scrivere i descrittori su `ep0` *prima*
+che il gadget venga legato all'UDC. Scrivere su `UDC` troppo presto fa
+fallire il bind, o fa enumerare un device senza endpoint. Quindi:
+
+1. crea gadget e funzione `ffs.adb`
+2. monta functionfs
+3. avvia `adbd`, che apre `ep0` e scrive i descrittori
+4. **aspetta** che compaiano `ep1`/`ep2`
+5. collega la funzione alla config
+6. solo ora `echo <udc> > UDC`
+
+E' la stessa sequenza di `usbdevice` e di Android. Il passo 4 e' una
+attesa esplicita con timeout: se scade, lo script **non** lega l'UDC e lo
+dice, invece di lasciare un gadget mezzo configurato che enumera male.
+
+### Costo
+
+adbd tira dentro openssl: il rootfs passa da 5,5 a 8,6 MiB, quasi tutto
+`libcrypto.so.3` (3,7 MB). Su una partizione rootfs da 224 MiB non e' un
+problema; su un target piu' stretto si toglie togliendo
+`BR2_PACKAGE_ANDROID_TOOLS_ADBD` dal defconfig e `S45adb` dall'overlay.
+
+
 ## Output atteso a boot riuscito
 
 Dopo il banner di U-Boot e i messaggi del kernel, `S99hello` esegue
@@ -341,6 +418,16 @@ effettiva di RAM e NAND.
 
 Con la variante initramfs, `/proc/mtd` puo' essere vuoto o assente: e'
 previsto, il rootfs non sta su NAND.
+
+Prima di questo, `S45adb` stampa una riga sola:
+
+```
+S45adb: gadget ADB attivo su ff740000.usb (0x2207:0x0006)
+```
+
+Se invece dice `nessun UDC` o `adbd non ha scritto i descrittori`, la
+board comunque completa il boot: il gadget e' una comodita', non una
+dipendenza dell'avvio.
 
 ---
 

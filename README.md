@@ -26,6 +26,7 @@ Questo README copre **come costruire e usare** il repository. Il resto sta in
 | [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md) | Ricognizione dell'SDK: ogni valore con la fonte esatta da cui e' stato ricavato, la catena di packaging Rockchip ricostruita comando per comando, e la tabella dei TODO aperti. **Il primo posto dove guardare se qualcosa non torna.** |
 | [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md) | Il *perche'* delle decisioni: glibc e non musl, `fit.sh` e non `make.sh`, nessuna patch a Buildroot, le quattro patch a U-Boot, AMP fuori scope. |
 | [docs/check-artifacts.sh](docs/check-artifacts.sh) | Controlla gli invarianti degli artefatti (struttura dei FIT, geometria UBI, offset, contenuto di `update.img`). Da lanciare dopo aver alzato uno SHA o toccato `post-image.sh`. |
+| [docs/RELEASE.md](docs/RELEASE.md) | Come pubblicare una release con le immagini gia' costruite, e cosa il testo deve dire. |
 | [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh) | Ricostruisce i mirror di kernel e U-Boot da un checkout SDK shallow. |
 
 ## Partire da questo template
@@ -102,6 +103,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
 - [Struttura](#struttura)
 - [Prerequisiti](#prerequisiti)
 - [Build](#build)
+- [Immagini precompilate](#immagini-precompilate)
 - [Flash](#flash)
 - [Console seriale](#console-seriale)
 - [Accesso via USB (adb)](#accesso-via-usb-adb)
@@ -324,6 +326,26 @@ In `output/images/`:
 ---
 
 ---
+
+## Immagini precompilate
+
+Se ti serve solo **verificare che una scheda parta**, non c'e' bisogno di
+costruire niente: le [Releases](../../releases) contengono un `update.img` gia'
+provato su hardware, con `MiniLoaderAll.bin`, `parameter.txt` e `SHA256SUMS`.
+
+```bash
+sha256sum -c SHA256SUMS
+sudo rkdeveloptool db MiniLoaderAll.bin
+sudo rkdeveloptool uf update.img
+sudo rkdeveloptool rd
+```
+
+Poi console a 1500000 8N1: se `hello-lyra` stampa modello, memoria e partizioni
+MTD, la scheda e' viva e il porting funziona su quell'esemplare.
+
+Le release si pubblicano **a mano**, non dalla CI: servirebbe `rkbin`, che non
+e' pubblico. Come farlo e' in [docs/RELEASE.md](docs/RELEASE.md).
+
 
 ## Flash
 

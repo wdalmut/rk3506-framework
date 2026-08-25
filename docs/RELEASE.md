@@ -9,7 +9,8 @@ verifica in pochi secondi.
 ## Procedura
 
 Partire da un albero pulito, per non pubblicare artefatti costruiti da
-modifiche non committate:
+modifiche non committate. Serve anche che tutto sia gia' pushato: il tag deve
+poter puntare a un commit che esiste sul remoto.
 
 ```bash
 git status --short          # deve essere vuoto
@@ -22,7 +23,7 @@ Preparare il kit. Il taglio e' volutamente minimo: serve a flashare e vedere se
 la scheda parte, non a coprire ogni caso d'uso.
 
 ```bash
-V=v0.1.0
+V=v0.2.0
 mkdir -p /tmp/rel-$V && cd /tmp/rel-$V
 cp ~/git/rk3506-framework/output/images/{update.img,MiniLoaderAll.bin,parameter.txt} .
 sha256sum update.img MiniLoaderAll.bin parameter.txt > SHA256SUMS

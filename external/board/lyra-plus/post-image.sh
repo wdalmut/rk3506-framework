@@ -35,8 +35,16 @@ cfg() {
 	sed -n "s/^$1=\"\\(.*\\)\"$/\\1/p; s/^$1=\\([^\"].*\\)$/\\1/p" "$BR2_CONFIG" | tail -1
 }
 
-RKBIN_DIR="$(cfg BR2_LYRA_RKBIN_DIR)"
-PACKTOOL_DIR="$(cfg BR2_LYRA_PACKTOOL_DIR)"
+# Radice del repository: BOARD_DIR e' <repo>/external/board/lyra-plus.
+TOPDIR="$(cd "$BOARD_DIR/../../.." && pwd)"
+
+# I percorsi vendor possono essere assoluti (un checkout altrove) oppure
+# relativi, e in quel caso valgono rispetto alla radice del repository. Il
+# default e' relativo e punta al submodule 'vendor'.
+abspath() { case "$1" in ""|/*) printf '%s' "$1";; *) printf '%s' "$TOPDIR/$1";; esac; }
+
+RKBIN_DIR="$(abspath "$(cfg BR2_LYRA_RKBIN_DIR)")"
+PACKTOOL_DIR="$(abspath "$(cfg BR2_LYRA_PACKTOOL_DIR)")"
 
 # Buildroot esporta agli script post-image solo BR2_CONFIG, BASE_DIR,
 # HOST_DIR, TARGET_DIR e BINARIES_DIR (buildroot/Makefile:504-510).
@@ -63,7 +71,8 @@ fi
 # confrontato con gli sha256 registrati in rkbin.sha256.
 
 [ -n "$RKBIN_DIR" ] || die "BR2_LYRA_RKBIN_DIR non impostato (make menuconfig -> Luckfox Lyra Plus)"
-[ -d "$RKBIN_DIR" ] || die "BR2_LYRA_RKBIN_DIR punta a '$RKBIN_DIR', che non esiste"
+[ -d "$RKBIN_DIR" ] || die "BR2_LYRA_RKBIN_DIR punta a '$RKBIN_DIR', che non esiste.
+    Se e' il submodule 'vendor', inizializzalo:  git submodule update --init vendor"
 
 for f in RKBOOT/RK3506MINIALL.ini RKTRUST/RK3506TOS.ini \
          tools/boot_merger tools/mkimage \

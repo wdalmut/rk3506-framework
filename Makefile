@@ -22,10 +22,16 @@ O            ?= $(TOPDIR)/output
 BR2_EXTERNAL := $(TOPDIR)/external
 BUILDROOT    := $(TOPDIR)/buildroot
 
-# SDK Luckfox, montato read-only. Serve solo per i binari vendor che non
-# sono ricompilabili: rkbin (blob DDR, boot_merger, mkimage, OP-TEE) e
-# tools/ (afptool, rkImageMaker). Vedi docs/BOARD-FACTS.md.
+# I binari vendor non ricompilabili (blob DDR, OP-TEE, boot_merger, mkimage,
+# afptool, rkImageMaker) stanno nel submodule `vendor`, quindi gia' dentro
+# l'albero: per costruire NON serve l'SDK Luckfox.
+#
+# L'SDK resta utile solo per due cose fuori dalla build: rigenerare i mirror
+# con docs/mk-vendor-mirror.sh, e confrontare gli artefatti con i suoi in
+# docs/check-artifacts.sh. Se la directory esiste viene montata read-only, se
+# non c'e' non succede niente.
 SDK_DIR      ?= $(HOME)/git/luckfox-lyra
+SDK_MOUNT    := $(if $(wildcard $(SDK_DIR)),-v $(SDK_DIR):/sdk:ro,)
 
 DOCKER       ?= docker
 IMAGE        ?= rk3506-framework:build
@@ -39,7 +45,7 @@ IN_CONTAINER := $(wildcard /.lyra-container)
 
 DOCKER_RUN = $(DOCKER) run --rm -i $(TTY) \
 	-v $(TOPDIR):/work \
-	-v $(SDK_DIR):/sdk:ro \
+	$(SDK_MOUNT) \
 	-u $(UID):$(GID) \
 	-w /work $(IMAGE)
 

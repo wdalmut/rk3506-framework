@@ -6,8 +6,9 @@ vendor, geometria della flash, e i valori misurati sull'hardware.
 Non e' il diario del porting. Qui ci sono i dati, con la fonte di ognuno; il
 *perche'* delle scelte sta in [SCELTE-DI-PROGETTO.md](SCELTE-DI-PROGETTO.md).
 
-Percorsi: `$SDK` e' il checkout dell'SDK Luckfox (`/sdk` nel container),
-`$WORK` la radice di questo repository (`/work`).
+Nelle citazioni qui sotto `$SDK` e' un checkout dell'SDK Luckfox: e' la fonte
+da cui questi fatti sono stati ricavati, **non** una dipendenza per costruire.
+I binari vendor che servono alla build stanno nel submodule `vendor/`.
 
 ## Identita'
 
@@ -147,7 +148,8 @@ primo boot*. Sono i valori che il defconfig usa per `mkfs.ubifs` e `ubinize`.
 
 ### rkbin — blob DDR
 
-Fonte: `$SDK/rkbin/RKBOOT/RK3506MINIALL.ini`
+Fonte: `$SDK/rkbin/RKBOOT/RK3506MINIALL.ini`, che e' anche in
+`vendor/rkbin/RKBOOT/RK3506MINIALL.ini`
 
 ```ini
 [CHIP_NAME]

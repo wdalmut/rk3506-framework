@@ -7,8 +7,8 @@
 #
 # Fa tre cose, tutte idempotenti:
 #   1. inizializza il submodule buildroot al tag LTS pinnato;
-#   2. verifica che l'SDK Luckfox sia raggiungibile (serve per rkbin e per
-#      i tool di packaging: sono binari vendor, non ricompilabili);
+#   2. inizializza il submodule vendor, con i binari Rockchip non
+#      ricompilabili (blob DDR, OP-TEE, boot_merger, mkimage, afptool);
 #   3. costruisce l'immagine Docker di build.
 #
 # Dopo:  make lyra_plus_defconfig && make
@@ -18,9 +18,6 @@ set -euo pipefail
 TOPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SDK_DIR="${SDK_DIR:-$HOME/git/luckfox-lyra}"
 IMAGE="${IMAGE:-rk3506-framework:build}"
-
-# Revisione rkbin attesa (manifest SDK Luckfox v1.4, tag linux-6.1-stan-rkr4.2).
-RKBIN_SHA="32ccaf811ae70ce050aa810869c63c2b34324d59"
 
 ok()   { printf '  \033[32mok\033[0m    %s\n' "$*"; }
 info() { printf '  \033[36m..\033[0m    %s\n' "$*"; }
@@ -46,16 +43,14 @@ case "$BR_VER" in
 	*) warn "buildroot $BR_VER non e' una LTS (le LTS sono le YYYY.02.x)" ;;
 esac
 
-# --- 2. SDK Luckfox: dipendenze binarie vendor -------------------------------
-# Non serve come build system — build.sh non viene mai lanciato — ma da qui
-# arrivano il blob DDR e i tool di packaging Rockchip.
-if [ ! -d "$SDK_DIR" ]; then
-	die "SDK Luckfox non trovato in '$SDK_DIR'.
-        Serve per rkbin (blob DDR, boot_merger, mkimage, OP-TEE) e per
-        afptool/rkImageMaker. Indicane un altro con:
-            SDK_DIR=/percorso/al/sdk ./setup.sh
-        e poi:
-            make SDK_DIR=/percorso/al/sdk ..."
+# --- 2. binari vendor -------------------------------------------------------
+# Non ricompilabili dai sorgenti: blob DDR, OP-TEE, boot_merger, mkimage,
+# afptool, rkImageMaker. Stanno nel submodule `vendor`, estratti dall'SDK
+# Luckfox: per costruire NON serve avere l'SDK (30 GB, di cui questi sono
+# lo 0,2%).
+if [ ! -e vendor/rkbin/RKBOOT/RK3506MINIALL.ini ]; then
+	info "inizializzo il submodule vendor (62 MB)"
+	git submodule update --init --depth 1 vendor
 fi
 
 MISSING=0
@@ -63,29 +58,26 @@ for f in rkbin/RKBOOT/RK3506MINIALL.ini \
          rkbin/RKTRUST/RK3506TOS.ini \
          rkbin/tools/boot_merger \
          rkbin/tools/mkimage \
-         rkbin/bin/rk35/rk3506_ddr_750MHz_v1.04.bin; do
-	[ -e "$SDK_DIR/$f" ] || { warn "manca $SDK_DIR/$f"; MISSING=1; }
+         rkbin/bin/rk35/rk3506_ddr_750MHz_v1.04.bin \
+         packtool/afptool \
+         packtool/rkImageMaker; do
+	[ -e "vendor/$f" ] || { warn "manca vendor/$f"; MISSING=1; }
 done
-[ "$MISSING" = 0 ] || die "il checkout rkbin dentro l'SDK e' incompleto"
-ok "rkbin trovato in $SDK_DIR/rkbin"
+[ "$MISSING" = 0 ] || die "il submodule vendor e' incompleto: git submodule update --init vendor"
+ok "binari vendor in vendor/"
 
-if [ -d "$SDK_DIR/rkbin/.git" ]; then
-	HAVE="$(git -C "$SDK_DIR/rkbin" rev-parse HEAD 2>/dev/null || echo '?')"
-	if [ "$HAVE" != "$RKBIN_SHA" ]; then
-		warn "rkbin e' a $HAVE, atteso $RKBIN_SHA (tag linux-6.1-stan-rkr4.2)"
-		warn "post-image.sh confrontera' comunque gli sha256 dei blob"
-	else
-		ok "rkbin al commit atteso"
-	fi
+# Gli sha256 li verifica comunque post-image.sh a ogni build, ma dirlo qui
+# evita di scoprire un kit sbagliato dopo mezz'ora di compilazione.
+if (cd vendor/rkbin && sha256sum -c --quiet "$TOPDIR/external/board/lyra-plus/rkbin.sha256" 2>/dev/null); then
+	ok "sha256 dei blob corrispondenti"
+else
+	warn "sha256 dei blob NON corrispondenti: post-image.sh si fermera'"
 fi
 
-if [ -x "$SDK_DIR/tools/linux/Linux_Pack_Firmware/rockdev/afptool" ] &&
-   [ -x "$SDK_DIR/tools/linux/Linux_Pack_Firmware/rockdev/rkImageMaker" ]; then
-	ok "afptool + rkImageMaker trovati (update.img verra' generato)"
-else
-	warn "afptool/rkImageMaker non trovati: update.img verra' SALTATO.
-        Tutti gli altri artefatti vengono prodotti lo stesso e restano
-        flashabili per partizione con rkdeveloptool."
+# L'SDK non serve alla build. Resta utile solo per rigenerare i mirror con
+# docs/mk-vendor-mirror.sh e per confrontare gli artefatti in check-artifacts.sh.
+if [ -d "$SDK_DIR" ]; then
+	ok "SDK trovato in $SDK_DIR (non serve per costruire, solo per i confronti)"
 fi
 
 # --- 3. immagine Docker ------------------------------------------------------

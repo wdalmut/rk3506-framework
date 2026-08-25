@@ -224,11 +224,12 @@ prima che `make.sh` lo sposti via. Con l'SDK montato read-only:
 mkdir: cannot create directory 'tmp': Read-only file system
 ```
 
-Un symlink `$(BUILD_DIR)/rkbin -> /sdk/rkbin` **non** risolve: si scrive
-attraverso il link. Serve una copia di lavoro vera. rkbin è 57 MB, quindi
-`post-image.sh` la rsyncia in `$(BUILD_DIR)/rkbin` a ogni build. Il checkout
-puntato da `BR2_LYRA_RKBIN_DIR` resta intatto e può stare su un mount `:ro`.
+Un symlink `$(BUILD_DIR)/rkbin -> vendor/rkbin` **non** risolve: si scrive
+attraverso il link, quindi si sporca il submodule. Serve una copia di lavoro
+vera. rkbin è 57 MB, quindi `post-image.sh` la rsyncia in
+`$(BUILD_DIR)/rkbin` a ogni build. La sorgente puntata da
+`BR2_LYRA_RKBIN_DIR` resta intatta, e può anche stare su un mount `:ro`.
 
 > Sottigliezza: se una versione precedente aveva lasciato lì un symlink,
-> `mkdir -p` lo attraversa e `rsync` scrive nell'SDK. `post-image.sh` rimuove
-> esplicitamente un eventuale symlink prima di creare la directory.
+> `mkdir -p` lo attraversa e `rsync` scrive nella sorgente. `post-image.sh`
+> rimuove esplicitamente un eventuale symlink prima di creare la directory.

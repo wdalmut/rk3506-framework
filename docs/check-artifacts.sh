@@ -20,8 +20,9 @@
 # Uso:
 #     docs/check-artifacts.sh [output/images]
 #
-# Se e' disponibile un checkout dell'SDK Luckfox gia' costruito, il confronto
-# con i suoi artefatti viene fatto in piu':
+# I pack tool servono al controllo 5 e vengono presi da vendor/packtool.
+# Se in piu' e' disponibile un checkout dell'SDK Luckfox gia' costruito, viene
+# fatto anche il confronto con i suoi artefatti:
 #     SDK_DIR=~/git/luckfox-lyra docs/check-artifacts.sh
 #
 set -uo pipefail
@@ -163,7 +164,14 @@ fi
 # ---------------------------------------------------------------------------
 head_ "5. contenuto di update.img"
 # ---------------------------------------------------------------------------
-PACKDIR="${SDK_DIR:+$SDK_DIR/tools/linux/Linux_Pack_Firmware/rockdev}"
+# I pack tool stanno in vendor/packtool (submodule) oppure, se si punta a un
+# checkout dell'SDK, sotto tools/linux/Linux_Pack_Firmware/rockdev.
+PACKDIR=""
+for c in "$(dirname "$0")/../vendor/packtool" \
+         ${SDK_DIR:+"$SDK_DIR/packtool"} \
+         ${SDK_DIR:+"$SDK_DIR/tools/linux/Linux_Pack_Firmware/rockdev"}; do
+    [ -x "$c/afptool" ] && { PACKDIR="$c"; break; }
+done
 if [ -n "$PACKDIR" ] && [ -x "$PACKDIR/afptool" ] && [ -x "$PACKDIR/rkImageMaker" ] \
    && [ -f "$IMG/update.img" ]; then
     TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT

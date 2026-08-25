@@ -6,9 +6,11 @@ comment "Dipendenze binarie vendor"
 
 config BR2_LYRA_RKBIN_DIR
 	string "percorso del checkout rkbin"
-	default "/sdk/rkbin"
+	default "vendor/rkbin"
 	help
-	  Percorso di un checkout del repository Rockchip 'rkbin'.
+	  Percorso di un checkout del repository Rockchip 'rkbin'. Se
+	  relativo, e' risolto rispetto alla radice di questo repository,
+	  quindi il default punta al submodule 'vendor'.
 
 	  Da qui vengono presi blob e tool che NON sono ricompilabili dai
 	  sorgenti e che quindi non vivono in questo repository:
@@ -21,9 +23,11 @@ config BR2_LYRA_RKBIN_DIR
 	    RKBOOT/RK3506MINIALL.ini               descrittore loader
 	    RKTRUST/RK3506TOS.ini                  descrittore OP-TEE
 
-	  Revisione attesa (dal manifest dell'SDK Luckfox v1.4):
-	    tag  linux-6.1-stan-rkr4.2
-	    sha  32ccaf811ae70ce050aa810869c63c2b34324d59
+	  Il submodule 'vendor' (github.com/wdalmut/rk3506-vendor-kit) li
+	  contiene gia', estratti dall'SDK Luckfox v1.4 al tag
+	  linux-6.1-stan-rkr4.2 (sha 32ccaf811ae70ce050aa810869c63c2b34324d59).
+	  Puntare a un checkout rkbin diverso e' comunque supportato: basta
+	  un percorso assoluto.
 
 	  post-image.sh verifica lo sha256 dei blob contro
 	  board/lyra-plus/rkbin.sha256 e si ferma se non corrispondono.
@@ -38,13 +42,15 @@ config BR2_LYRA_RKBIN_DIR
 
 config BR2_LYRA_PACKTOOL_DIR
 	string "percorso dei tool Rockchip di packaging (afptool, rkImageMaker)"
-	default "/sdk/tools/linux/Linux_Pack_Firmware/rockdev"
+	default "vendor/packtool"
 	help
 	  Directory che contiene 'afptool' e 'rkImageMaker', usati per
-	  produrre update.img. Nell'SDK Luckfox e':
-	    tools/linux/Linux_Pack_Firmware/rockdev
+	  produrre update.img. Come sopra, un percorso relativo e' risolto
+	  rispetto alla radice del repository.
 
-	  Non stanno in rkbin: sono nel repository 'tools' dell'SDK.
+	  Non stanno in rkbin: nell'SDK sono nel repository 'tools', sotto
+	  tools/linux/Linux_Pack_Firmware/rockdev. Il submodule 'vendor' li
+	  raccoglie in packtool/.
 
 	  Se lasciato vuoto, o se i due binari non sono presenti,
 	  post-image.sh SALTA update.img con un avviso esplicito e

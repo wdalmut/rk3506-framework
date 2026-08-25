@@ -40,6 +40,22 @@
 # al baseline vendor. Quelle modifiche, se servono, vanno come patch numerate
 # in external/board/lyra-plus/patches/linux/.
 #
+# E IL VENDOR KIT?
+# ----------------
+# Questo script rigenera i mirror di kernel e U-Boot. Il terzo mirror,
+# github.com/wdalmut/rk3506-vendor-kit (submodule `vendor`), non c'entra con
+# il problema dello shallow: sono file, non storia git. Si rifa' cosi', da un
+# checkout dell'SDK:
+#
+#     cd <vendor-kit>
+#     rm -rf rkbin packtool && mkdir -p rkbin packtool
+#     cp -a "$SDK/rkbin/." rkbin/ && rm -rf rkbin/.git
+#     cp -a "$SDK/tools/linux/Linux_Pack_Firmware/rockdev/"{afptool,rkImageMaker} packtool/
+#
+# Poi in questo repository va rigenerato
+# external/board/lyra-plus/rkbin.sha256, perche' post-image.sh verifica gli
+# sha256 a ogni build e si ferma se non combaciano.
+#
 # ALTERNATIVA MIGLIORE, SE HAI ACCESSO ALLA RETE DI ORIGINE
 # ---------------------------------------------------------
 # Se riesci a raggiungere ssh://git@192.168.10.75/, non serve niente di tutto

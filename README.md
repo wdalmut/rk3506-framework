@@ -123,6 +123,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
 ├── docker/Dockerfile             Ubuntu 22.04, unico posto dove si compila
 ├── docs/                         riferimento di board, scelte, strumenti
 ├── buildroot/                    submodule upstream, tag 2026.02.3 (LTS)
+├── vendor/                       submodule: binari Rockchip non ricompilabili
 └── external/
     ├── Config.in                 opzioni della board (path rkbin, tool di packaging)
     ├── external.mk
@@ -159,41 +160,57 @@ tool che producono le immagini flashabili (`boot_merger`, `mkimage`,
 
 ## Prerequisiti
 
-Sull'host servono solo tre cose:
+Sull'host servono due cose:
 
 | Cosa | Perche' |
 |------|---------|
-| `git` | submodule Buildroot |
+| `git` | i submodule: Buildroot e i binari vendor |
 | `docker` | tutta la compilazione avviene dentro il container |
-| Checkout dell'**SDK Luckfox** | blob DDR e tool di packaging vendor, non ricompilabili |
 
 Non serve installare toolchain, `python2`, `gcc` vecchi o altro: stanno nel
-container.
+container. **E non serve l'SDK Luckfox.**
 
-### L'SDK serve, ma non come build system
+### I binari vendor stanno nel submodule `vendor`
 
-`build.sh` non viene **mai** lanciato. L'SDK e' montato **read-only** e da li'
-si prendono solo i binari vendor che non si possono ricostruire dai sorgenti:
+Alcune cose non sono ricompilabili dai sorgenti e vanno prese cosi' come sono:
 
-| Da | Cosa | A che serve |
-|----|------|-------------|
-| `rkbin/bin/rk35/rk3506_ddr_750MHz_v1.04.bin` | blob | init DDR eseguita dal BootROM |
-| `rkbin/bin/rk35/rk3506_tee_v1.25.bin` | blob | OP-TEE, incluso nel FIT di `uboot.img` |
-| `rkbin/bin/rk35/rk3506_usbplug_v1.02.bin` | blob | CODE472 (modalita' MaskROM/USB) |
-| `rkbin/tools/{boot_merger,mkimage}` | tool | assemblano loader e FIT |
-| `rkbin/RKBOOT/RK3506MINIALL.ini`, `rkbin/RKTRUST/RK3506TOS.ini` | descrittori | dicono ai tool cosa mettere dove |
-| `tools/linux/Linux_Pack_Firmware/rockdev/{afptool,rkImageMaker}` | tool | producono `update.img` |
+| File | A che serve |
+|------|-------------|
+| `vendor/rkbin/bin/rk35/rk3506_ddr_750MHz_v1.04.bin` | init DDR, eseguita dal BootROM |
+| `vendor/rkbin/bin/rk35/rk3506_tee_v1.25.bin` | OP-TEE, finisce nel FIT di `uboot.img` |
+| `vendor/rkbin/bin/rk35/rk3506_usbplug_v1.02.bin` | CODE472, modalita' MaskROM/USB |
+| `vendor/rkbin/tools/{boot_merger,mkimage}` | assemblano loader e FIT |
+| `vendor/rkbin/RKBOOT/RK3506MINIALL.ini`, `RKTRUST/RK3506TOS.ini` | dicono ai tool cosa mettere dove |
+| `vendor/packtool/{afptool,rkImageMaker}` | producono `update.img` |
 
-Il percorso e' **configurabile**, non cablato: `BR2_LYRA_RKBIN_DIR` e
-`BR2_LYRA_PACKTOOL_DIR` in `make menuconfig` → *Luckfox Lyra Plus*. Il default
-e' `/sdk/...`, cioe' il mount del container.
+Vengono da [rk3506-vendor-kit](https://github.com/wdalmut/rk3506-vendor-kit),
+estratti dall'SDK Luckfox e ridistribuiti secondo la licenza Rockchip, che
+consente esplicitamente uso, copia e distribuzione.
 
-I blob non vengono copiati alla cieca: `post-image.sh` ne verifica lo `sha256`
+Esiste come repository separato per un motivo pratico: l'SDK Luckfox completo
+pesa **30 GB**, e questa roba ne e' lo **0,2%**. Senza, per costruire
+un'immagine bisognerebbe prima fare un `repo sync` dell'intero SDK per usarne
+62 MB.
+
+I blob non sono usati alla cieca: `post-image.sh` ne verifica lo `sha256`
 contro `external/board/lyra-plus/rkbin.sha256` e **si ferma** se non
-corrispondono. Revisione attesa di `rkbin`: tag `linux-6.1-stan-rkr4.2`, commit
-`32ccaf811ae70ce050aa810869c63c2b34324d59`. Se l'aggiornamento e' voluto, si
-rigenera `rkbin.sha256`; per forzare una volta sola,
-`LYRA_ALLOW_RKBIN_MISMATCH=1`.
+corrispondono. Per puntare a un altro checkout `rkbin` bastano
+`BR2_LYRA_RKBIN_DIR` e `BR2_LYRA_PACKTOOL_DIR` in `make menuconfig` →
+*Luckfox Lyra Plus*: un percorso relativo si intende dalla radice del
+repository, uno assoluto va dove vuoi.
+
+### Quando serve comunque l'SDK
+
+Per costruire, mai. Serve solo per due cose accessorie, ed entrambe sono
+opzionali:
+
+- rigenerare i mirror di kernel e U-Boot con
+  [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh), se esce un SDK nuovo;
+- confrontare gli artefatti con quelli prodotti dall'SDK in
+  [docs/check-artifacts.sh](docs/check-artifacts.sh).
+
+Se `~/git/luckfox-lyra` esiste il `Makefile` lo monta read-only su `/sdk`; se
+non c'e', non succede niente.
 
 ### Mirror di kernel e U-Boot
 
@@ -201,20 +218,14 @@ I due `_CUSTOM_GIT` puntano a:
 
 | | URL | Commit |
 |---|-----|--------|
-| kernel 6.1.99 | `https://github.com/wdalmut/rk3506-kernel.git` | `696a8549d1a582337c8032c02a2aea35790047a4` |
-| U-Boot 2017.09 | `https://github.com/wdalmut/rk3506-uboot.git` | `4d88b0a83c87488f343fb4cc4f56ffc598b2e0a3` |
+| kernel 6.1.99 | `https://github.com/wdalmut/rk3506-kernel.git` | `73bca17b67938d649b072408780369f600555263` |
+| U-Boot 2017.09 | `https://github.com/wdalmut/rk3506-uboot.git` | `1625f78b6dcf9fe401d447da79132b7bc6804538` |
 
 Sono **mirror**: l'origine dell'SDK e' `ssh://git@192.168.10.75/...`, una LAN
-privata Luckfox non raggiungibile da fuori (vedi `docs/BOARD-FACTS.md` §1a).
-
-> **I due repository vanno pubblicati prima della prima build.** Finche' non
-> esistono, `make` si ferma allo scaricamento del kernel. I checkout dentro
-> l'SDK sono `clone-depth=1`, quindi il push va fatto da un clone completo
-> oppure pubblicando quell'unico commit su un branch. Assicurarsi che il
-> commit sia **raggiungibile da un ref** (branch o tag): un fetch di SHA nudo
-> funziona solo se il server ha `uploadpack.allowReachableSHA1InWant`.
-
----
+privata Luckfox non raggiungibile da fuori. I commit non hanno parent e riusano
+l'oggetto tree del commit vendor, quindi il contenuto e' identico bit per bit;
+lo SHA differisce perche' differiscono i parent. Si rigenerano con
+[docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh).
 
 ---
 
@@ -253,13 +264,13 @@ che equivale a
 ```bash
 docker run --rm -it \
     -v "$PWD":/work \
-    -v "$HOME/git/luckfox-lyra":/sdk:ro \
     -u "$(id -u):$(id -g)" \
     -w /work rk3506-framework:build bash
 ```
 
-I due mount sono entrambi necessari: `/work` e' il repo, `/sdk` e' l'SDK
-read-only da cui arrivano i blob.
+Un mount solo: i binari vendor sono nel submodule `vendor`, quindi gia' dentro
+`/work`. Se `$SDK_DIR` esiste, il `Makefile` aggiunge `-v $SDK_DIR:/sdk:ro`,
+ma serve solo ai confronti, non alla build.
 
 ### Variante initramfs (primo bring-up)
 

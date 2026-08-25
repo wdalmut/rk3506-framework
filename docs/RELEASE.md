@@ -1,10 +1,10 @@
 # Pubblicare una release
 
 Le immagini si pubblicano **a mano**. Non c'e' un workflow che le costruisca,
-e non e' una dimenticanza: la build ha bisogno di `rkbin` (blob DDR,
-`boot_merger`, `mkimage`, OP-TEE), che non e' pubblico e non puo' stare in un
-runner GitHub. La CI copre quello che si puo' verificare senza SDK; le immagini
-le fa chi ha l'SDK sottomano.
+e non e' una dimenticanza. Costruire richiede il container Docker e circa
+mezz'ora di compilazione: e' lavoro che ha senso fare su una macchina vera,
+quando si e' pronti a pubblicare, non a ogni push. La CI copre quello che si
+verifica in pochi secondi.
 
 ## Procedura
 
@@ -15,7 +15,7 @@ modifiche non committate:
 git status --short          # deve essere vuoto
 make lyra_plus_defconfig
 make
-SDK_DIR=~/git/luckfox-lyra docs/check-artifacts.sh     # deve passare
+docs/check-artifacts.sh                     # deve passare
 ```
 
 Preparare il kit. Il taglio e' volutamente minimo: serve a flashare e vedere se

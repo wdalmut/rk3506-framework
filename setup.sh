@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
 # setup.sh — prepara un clone pulito per la build.
 #
 # Fa tre cose, tutte idempotenti:

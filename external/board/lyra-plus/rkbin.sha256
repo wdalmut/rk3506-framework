@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
 1056dedee43739a7e9f5dc3d42ebfeb5422b0dd35d41676ce3031a4d73da0929  bin/rk35/rk3506_ddr_750MHz_v1.04.bin
 200fa8a183b0ca4af05a921d538d651d14b6f955f38b84ef0527a7f5409a339b  bin/rk35/rk3506_usbplug_v1.02.bin
 690eb8a14d96ae00576d82c1c5a82bb2771cc7f1227af8f75f58038ee2fe9965  bin/rk35/rk3506_tee_v1.25.bin

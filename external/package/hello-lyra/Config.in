@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
 config BR2_PACKAGE_HELLO_LYRA
 	bool "hello-lyra"
 	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS

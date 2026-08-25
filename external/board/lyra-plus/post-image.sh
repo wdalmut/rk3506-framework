@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
 # post-image.sh — riproduce la catena di packaging Rockchip che build.sh
 # esegue dopo la compilazione, e che Buildroot non conosce.
 #

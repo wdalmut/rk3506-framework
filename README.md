@@ -26,6 +26,7 @@ all'avvio stampa cosa il sistema vede davvero.
 - [Output atteso a boot riuscito](#output-atteso-a-boot-riuscito)
 - [Verificare che post-image.sh produca gli stessi artefatti dell'SDK](#verificare-che-post-imagesh-produca-gli-stessi-artefatti-dellsdk)
 - [Scelte di progetto](#scelte-di-progetto)
+- [Licenza](#licenza)
 - [Cosa manca ancora](#cosa-manca-ancora)
 
 ---
@@ -556,6 +557,33 @@ Questo albero parte dal **baseline vendor**: solo Linux, partizioni
 `uboot`/`boot`/`rootfs`. Vedi TODO-8.
 
 ---
+
+## Licenza
+
+**GPL-2.0-or-later**, come Buildroot e U-Boot — i due progetti a cui questo
+repository fa da collante. Non GPL-2.0-*only* come Linux: `or-later` lascia
+aperta la strada a GPLv3 per il codice nostro, e si allinea a cio' che
+costruiamo. Testo completo in [LICENSE](LICENSE).
+
+Ogni file che abbiamo scritto porta l'header SPDX. **Le eccezioni sono
+tracciate per file**, non nascoste sotto una licenza unica:
+
+| File | Licenza | Perche' |
+|------|---------|---------|
+| `external/board/lyra-plus/boot.its` | **GPL-2.0-only** | copiato verbatim dall'SDK (`device/rockchip/rk3506/zboot.its`), Copyright Rockchip. E' l'unico file "solo v2" dell'albero: si combina con GPL-2.0+, ma **blocca un eventuale passaggio a GPLv3**. |
+| `external/board/lyra-plus/dts/*.dts` | GPL-2.0+ **OR MIT** | derivato dal DTS vendor, che e' dual-licensed. Header SPDX conservato. |
+| `external/board/lyra-plus/patches/uboot/*.patch` | GPL-2.0+ | **non le licenziamo noi.** Il `COPYING` di Buildroot: *"Buildroot also bundles patch files... Those patches are not covered by the license of Buildroot. Instead, they are covered by the license of the software to which the patches are applied."* I file U-Boot toccati sono tutti `SPDX: GPL-2.0+`. |
+| `external/package/hello-lyra/src/*` | **MIT** | codice nostro, indipendente. Resta MIT perche' `hello-lyra.mk` dichiara `HELLO_LYRA_LICENSE = MIT` e quel metadato finisce in `make legal-info`: relicenziare il sorgente senza aggiornare il `.mk` produrrebbe un report legale falso. MIT e' comunque compatibile GPL. |
+| `external/board/lyra-plus/parameter.txt` | dato Rockchip | tabella delle partizioni copiata dall'SDK, senza intestazione di licenza propria. |
+| `build-trace*.log` | output di esecuzione | trace di `build.sh` dell'SDK, conservati come prova; contengono comandi e messaggi degli script Rockchip. |
+
+I `configs/*_defconfig` **non** hanno header SPDX di proposito: `make
+savedefconfig` rigenera quei file e ne rimuoverebbe i commenti, rompendo il
+criterio di accettazione 2.
+
+> Questa e' igiene di licensing, non consulenza legale. Prima di pubblicare il
+> repository vale la pena farla confermare.
+
 
 ## Cosa manca ancora
 

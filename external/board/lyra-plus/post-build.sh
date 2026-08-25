@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 #
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
 # post-build.sh — ritocchi al TARGET_DIR prima che venga impacchettato.
 # Gira dentro fakeroot, dopo l'overlay e dopo l'install dei package.
 #

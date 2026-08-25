@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
 menu "Luckfox Lyra Plus (RK3506G2)"
 
 comment "Dipendenze binarie vendor"

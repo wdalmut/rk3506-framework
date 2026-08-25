@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
 # Wrapper attorno a Buildroot upstream.
 #
 # Non contiene logica di build: serve solo a non far ripetere ogni volta
@@ -82,4 +84,5 @@ defconfigs:
 	@ls -1 $(BR2_EXTERNAL)/configs | sed 's/^/  /'
 
 help:
-	@awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' $(firstword $(MAKEFILE_LIST))
+	@awk '/SPDX-License-Identifier|^# Copyright/{next} /^#$$/{next} \
+	      /^#/{sub(/^# ?/,""); print; next} {exit}' $(firstword $(MAKEFILE_LIST))

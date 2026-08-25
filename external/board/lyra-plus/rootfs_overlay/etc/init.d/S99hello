@@ -1,5 +1,8 @@
 #!/bin/sh
 #
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
 # S99hello — lancia hello-lyra all'avvio.
 #
 # Installato dall'overlay (BR2_ROOTFS_OVERLAY), non dal package: il package

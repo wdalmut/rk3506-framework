@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // hello-lyra — verifica di boot per Luckfox Lyra Plus (Rockchip RK3506G2).
 //
 // Non fa nulla di utile di per se': serve a rispondere alla domanda "il

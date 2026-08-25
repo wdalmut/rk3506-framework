@@ -206,8 +206,6 @@ CREATE_IDB=true
 
 ---
 
----
-
 ## Artefatti prodotti
 
 
@@ -258,7 +256,7 @@ l'arrotondamento a `%.0f` di `hello-lyra` nascondeva proprio la cifra che
 permetteva di chiudere la questione.
 
 **2. `MemTotal` = 89 216 kB (87,1 MiB), che è poco.** Confermato e approfondito
-nella sezione [32 MiB di RAM fermi in un CMA che non usiamo](#32-mib-di-ram-fermi-in-un-cma-che-non-usiamo).
+nella sezione [I 32 MiB di CMA, e perche' restano](#i-32-mib-di-cma-e-perche-restano).
 Il DTS di board fa:
 
 ```
@@ -273,13 +271,11 @@ mentre il default nel dtsi è `size = <0x0>`. Quindi il DTS vendor riserva
 (`linux.config` non applica `rk3506-display.config`).
 
 La misura successiva ha dato `CmaTotal = 32 MiB` e `CmaFree = 0`: il sospetto
-regge. Dettaglio e conti nella sezione dedicata.
+regge. Non e' un difetto e non va corretto qui — vedi la sezione dedicata.
 
 ---
 
----
-
-## 32 MiB di RAM fermi in un CMA che non usiamo
+## I 32 MiB di CMA, e perche' restano
 
 Misurato da `hello-lyra` sulla board:
 
@@ -325,13 +321,24 @@ dmesg | grep -i '^\[.*\] Memory:'
 # es. Memory: 89216K/131072K available (... reserved, 32768K cma-reserved)
 ```
 
-Se confermato, azzerare `&cma` in un DTS di board nostro restituisce **32 MiB
-su 128, cioè il 37% di RAM utilizzabile in più**. Il meccanismo esiste già:
-`BR2_LINUX_KERNEL_CUSTOM_DTS_PATH`, usato per la variante initramfs.
+### Decisione: si tengono
 
-Da non fare alla cieca: chi un domani accende il display si ritrova senza
-memoria contigua e con un VOP che non alloca framebuffer. La scelta va legata
-al fragment display, non presa una volta per tutte.
+Azzerare `&cma` restituirebbe **32 MiB su 128, cioè il 37% di RAM utilizzabile
+in più**, con un DTS custom via `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH` — lo stesso
+meccanismo della variante initramfs.
+
+Non si fa in questa base, ed è una scelta, non una dimenticanza. Il CMA è la
+metà che costa cambiare: accendere un pannello per un esperimento significa
+aggiungere il fragment display e basta, mentre con il CMA azzerato qui
+servirebbe anche un DTS di board solo per rimetterlo. E il sintomo di
+essersene dimenticati — un VOP che non alloca framebuffer — è fra i più
+oscuri da diagnosticare.
+
+Il verso giusto è l'opposto: **si tolgono in fase di target**, quando si sa
+che quel prodotto il display non ce l'ha.
+
+Conseguenza pratica da conoscere: su questa base `MemTotal` è 87,1 MiB e
+`CmaFree` è 0. È il valore atteso, non un sintomo di DDR mal inizializzata.
 
 ---
 
@@ -339,6 +346,6 @@ al fragment display, non presa una volta per tutte.
 
 | # | Criticita' | Cosa manca |
 |---|-----------|------------|
-| 1 | 🟠 | Quanta DDR monta la board, e quanto se ne recupera azzerando il CMA che non usiamo. Una riga: `dmesg \| grep -i 'Memory:'`. Vedi la sezione sul CMA. |
+| 1 | 🟡 | Quanta DDR monta la board. I conti tornano con 128 MiB, ma non è misurato. Una riga: `dmesg \| grep -i 'Memory:'`. Serve a sapere quanto si recupera togliendo il CMA in fase di target. |
 | 2 | 🟡 | A quale offset il BootROM RK3506 cerca l'IDB su **SPI NAND**. Accertato solo che i primi 4 MiB sono riservati e che su SD/eMMC e' il settore 64. Blocca `flash.img` come immagine avviabile, non il flash via `update.img`. |
 | 3 | 🟢 | I 640 KiB (5 blocchi) di coda non coperti da `mtdparts`. Non e' il vendor storage, che sta a offset 0 e occupa 64 KiB (`vendor.c:42,47`). Lo 0.25% del chip: curiosita'. |

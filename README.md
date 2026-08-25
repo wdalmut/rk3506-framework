@@ -74,10 +74,30 @@ applicativi, tuning per un caso d'uso, e le tracce di lavorazione di un
 porting. Se una cosa serve a *un* progetto, vive nel repo privato di quel
 progetto. Se serve a *tutti* i progetti su questa board, allora sale qui.
 
-Per il display, che e' l'esempio tipico: il fragment `rk3506-display.config`
-del kernel vendor **non** e' applicato, e il DTS di board riserva 32 MiB di CMA
-che oggi nessuno usa. Le due cose vanno accese insieme, nel repo del progetto.
-Il perche' e i numeri sono in [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md).
+### Display e i 32 MiB di CMA
+
+Vale la pena saperlo prima di guardare `MemTotal` e pensare che qualcosa non
+va: **la board ha 32 MiB di CMA riservati, e restano riservati di proposito.**
+
+Il DTS vendor fa `&cma { size = <0x2000000>; }` sotto il commento
+`/**********display**********/`, mentre il default nel dtsi e' `0`. Quella
+memoria serve al VOP per allocare i framebuffer. Questa base **non** applica il
+fragment `rk3506-display.config` del kernel, quindi il driver non c'e' e quei
+32 MiB oggi non li usa nessuno: `MemTotal` risulta 87,1 MiB e `CmaFree` zero.
+
+Restano lo stesso, perche' il CMA e' la meta' che costa cambiare. Accendere un
+pannello per un esperimento vuol dire aggiungere il fragment display al
+proprio repo e basta; se invece il CMA fosse azzerato qui, bisognerebbe anche
+scrivere un DTS di board solo per rimetterlo, e il sintomo di essersene
+dimenticati e' un VOP che non alloca — oscuro da diagnosticare.
+
+Il verso giusto e' l'opposto: **si tolgono in fase di target**, quando si sa
+che quel prodotto il display non ce l'ha. Sono 32 MiB su 128, cioe' il 37% di
+RAM utilizzabile in piu', e si recuperano con un DTS custom che azzera `&cma`
+via `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH` — lo stesso meccanismo gia' usato per
+la variante initramfs.
+
+Misure e conti in [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md).
 
 Se un giorno serve portare **un'altra board Rockchip** e non un altro progetto
 su questa, il lavoro e' diverso: `post-image.sh` ha `RK3506MINIALL.ini`,
@@ -537,7 +557,9 @@ Le righe che valgono davvero come verifica sono tre:
   `BR2_LINUX_KERNEL_INTREE_DTS_NAME` non e' quello che si crede.
 - **`MemTotal`** — se la RAM e' molto meno del previsto, il blob DDR non ha
   fatto il suo lavoro. E' il primo posto dove guardare quando il boot e'
-  instabile.
+  instabile. Attenzione pero': **87,1 MiB e' il valore normale su questa
+  base**, non un sintomo. Mancano i 32 MiB di CMA riservati al display, che
+  sono tenuti apposta — vedi [Display e i 32 MiB di CMA](#display-e-i-32-mib-di-cma).
 - **`mtd0/1/2`** — nomi e dimensioni devono combaciare con `parameter.txt`. Se
   non c'e' nessuna partizione, `mtdparts=` non e' arrivato al kernel: il DTB e'
   sbagliato o U-Boot ha sovrascritto il bootargs.

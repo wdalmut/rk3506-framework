@@ -96,7 +96,7 @@ righe). Riscriverlo sarebbe un fork mascherato.
   `--sign` (`fit-core.sh:231-238`). Niente doppia build.
 
 E' comunque la stessa invocazione che `make.sh` fa subito dopo aver compilato
-(`build-trace.log:4056`), e `make.sh` non esporta variabili d'ambiente: `fit.sh`
+(`trace di `build.sh``), e `make.sh` non esporta variabili d'ambiente: `fit.sh`
 e' un processo autonomo, quindi chiamarlo direttamente e' equivalente.
 
 Un dettaglio che fa fallire questo passo se non lo si conosce: la catena
@@ -186,3 +186,49 @@ adbd tira dentro openssl: il rootfs passa da 5,5 a 8,6 MiB, quasi tutto
 `libcrypto.so.3` (3,7 MB). Su una partizione rootfs da 224 MiB non e' un
 problema; su un target piu' stretto si toglie togliendo
 `BR2_PACKAGE_ANDROID_TOOLS_ADBD` dal defconfig e `S45adb` dall'overlay.
+## Due trappole della catena vendor, trovate solo costruendo
+
+Nessuna delle due è deducibile leggendo gli script: si manifestano al primo
+`post-image.sh` reale.
+
+### `make.sh` risolve la toolchain a ogni invocazione, anche nei sotto-comandi
+
+`select_toolchain()` gira incondizionatamente (make.sh:797), quindi anche per
+`./make.sh itb` e `./make.sh --spl`, che `fit.sh` richiama al suo interno. Se
+`CROSS_COMPILE=` non è sulla riga di comando, ripiega sui prebuilt hardcoded
+dell'SDK (make.sh:15):
+
+```
+CROSS_COMPILE_ARM32=../prebuilts/gcc/linux-x86/arm/gcc-linaro-6.3.1-.../arm-linux-gnueabihf-
+```
+
+Quella directory non esiste nella build dir di Buildroot, il `cd` fallisce, e
+si ottiene:
+
+```
+ERROR: No find /work/output/build/uboot-<sha>/arm-linux-gnueabihf-gcc
+```
+
+Il meccanismo previsto per questo caso è il file cache `.cc` (make.sh:274-276):
+se esiste nella radice di U-Boot, `select_toolchain()` legge da lì il prefisso
+invece di indovinarlo. `post-image.sh` ce lo scrive con la toolchain di
+Buildroot, prima di chiamare `fit.sh`.
+
+### La catena scrive **dentro** rkbin, quindi read-only non basta
+
+`spl.sh:54` fa `rm tmp -rf && mkdir tmp -p` nella **radice di rkbin**, dove poi
+copia lo SPL e l'`.ini` modificato; `boot_merger` ci deposita il loader prodotto
+prima che `make.sh` lo sposti via. Con l'SDK montato read-only:
+
+```
+mkdir: cannot create directory 'tmp': Read-only file system
+```
+
+Un symlink `$(BUILD_DIR)/rkbin -> /sdk/rkbin` **non** risolve: si scrive
+attraverso il link. Serve una copia di lavoro vera. rkbin è 57 MB, quindi
+`post-image.sh` la rsyncia in `$(BUILD_DIR)/rkbin` a ogni build. Il checkout
+puntato da `BR2_LYRA_RKBIN_DIR` resta intatto e può stare su un mount `:ro`.
+
+> Sottigliezza: se una versione precedente aveva lasciato lì un symlink,
+> `mkdir -p` lo attraversa e `rsync` scrive nell'SDK. `post-image.sh` rimuove
+> esplicitamente un eventuale symlink prima di creare la directory.

@@ -6,9 +6,11 @@
 # post-image.sh — riproduce la catena di packaging Rockchip che build.sh
 # esegue dopo la compilazione, e che Buildroot non conosce.
 #
-# Riferimento: docs/BOARD-FACTS.md §1c, ricostruito dai trace in docs/traces/,
-# prodotti con `env SHELLOPTS=xtrace bash ./build.sh` sull'SDK Luckfox.
-# Ogni passo qui sotto cita la riga del trace da cui e' stato derivato.
+# La sequenza e' stata ricostruita eseguendo l'SDK sotto trace
+#     cd /sdk && env SHELLOPTS=xtrace bash ./build.sh
+# e leggendo le invocazioni reali, non interpretando gli script a mano: hanno
+# piu' livelli di `source` e variabili impostate a distanza.
+# Il perche' delle scelte e' in docs/SCELTE-DI-PROGETTO.md.
 #
 # Ordine (identico a quello dell'SDK):
 #   1. loader + uboot.img   <- u-boot/scripts/fit.sh -> rkbin: boot_merger, mkimage
@@ -131,7 +133,7 @@ msg "packing loader + uboot.img (scripts/fit.sh, chip $UBOOT_CHIP)"
 	#     --sign (fit-core.sh:231-238). Quindi niente doppia build.
 	#
 	# E' esattamente l'invocazione che make.sh fa dopo aver compilato
-	# (build-trace.log:4056), e make.sh non esporta variabili: fit.sh e'
+	#, e make.sh non esporta variabili: fit.sh e'
 	# un processo autonomo, quindi chiamarlo da qui e' equivalente.
 	#
 	# --spl-new sostituisce lo SPL prebuilt di rkbin (rk3506_spl_v1.10.bin)
@@ -153,7 +155,7 @@ install -m 0644 "$UBOOT_DIR/uboot.img" "$BINARIES_DIR/uboot.img"
 [ ! -f "$UBOOT_DIR/trust.img" ] || install -m 0644 "$UBOOT_DIR/trust.img" "$BINARIES_DIR/trust.img"
 
 # ---------------------------------------------------------------------------
-# 2. resource.img  (build-trace.log:8938)
+# 2. resource.img
 # ---------------------------------------------------------------------------
 LINUX_DIR="$(find "$BUILD_DIR" -maxdepth 1 -type d -name 'linux-*' ! -name 'linux-headers*' | head -1)"
 [ -n "$LINUX_DIR" ] || die "directory di build del kernel non trovata sotto $BUILD_DIR"
@@ -182,7 +184,7 @@ msg "resource.img (dtb: ${DTB_NAME}.dtb)"
 [ -f "$WORK/resource.img" ] || die "resource_tool non ha prodotto resource.img"
 
 # ---------------------------------------------------------------------------
-# 3. boot.img — FIT  (build-trace.log:8980-8985)
+# 3. boot.img — FIT
 # ---------------------------------------------------------------------------
 # Stessa logica di device/rockchip/common/scripts/mk-fitimage.sh: sostituisce
 # i placeholder @KERNEL_*@ nell'.its e chiama il mkimage di rkbin.
@@ -249,7 +251,7 @@ sys.exit(rc)
 PYEOF
 
 # ---------------------------------------------------------------------------
-# 5. update.img  (build-trace-pack.log:3109-3130)
+# 5. update.img
 # ---------------------------------------------------------------------------
 AFPTOOL="$PACKTOOL_DIR/afptool"
 RKIMAGEMAKER="$PACKTOOL_DIR/rkImageMaker"

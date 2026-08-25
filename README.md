@@ -27,46 +27,61 @@ Questo README copre **come costruire e usare** il repository. Il resto sta in
 | [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md) | Il *perche'* delle decisioni: glibc e non musl, `fit.sh` e non `make.sh`, nessuna patch a Buildroot, le quattro patch a U-Boot, AMP fuori scope. |
 | [docs/check-artifacts.sh](docs/check-artifacts.sh) | Controlla gli invarianti degli artefatti (struttura dei FIT, geometria UBI, offset, contenuto di `update.img`). Da lanciare dopo aver alzato uno SHA o toccato `post-image.sh`. |
 | [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh) | Ricostruisce i mirror di kernel e U-Boot da un checkout SDK shallow. |
-| [docs/traces/](docs/traces/) | I trace di `build.sh` dell'SDK da cui e' stata ricostruita la catena di packaging. BOARD-FACTS li cita per numero di riga. |
 
 ## Partire da questo template
 
-Questo repository e' un **template GitHub**: "Use this template" crea un nuovo
-progetto con tutti i file e una storia nuova. E' pensato per far partire un
-altro progetto **sulla stessa Luckfox Lyra Plus**, quindi tutto cio' che
-riguarda la board — `parameter.txt`, `boot.its`, il DTS, gli SHA di kernel e
-U-Boot, `docs/BOARD-FACTS.md`, i trace — va **tenuto**: e' gia' verificato su
-hardware e non va rifatto.
+Questo repository e' un **template GitHub** e vuole restare il **minimo
+indispensabile**: una base che si costruisce, parte e da' una shell, su cui
+provare una feature senza rifare ogni volta il porting.
 
-Cosa cambiare, in ordine di importanza:
+Il modo d'uso previsto e': "Use this template" → repository **privato** → li'
+dentro il lavoro vero. Quello che nasce nel progetto resta nel progetto; qui
+torna solo cio' che e' utile a *qualunque* progetto su questa board.
 
-1. **La password di root.** `BR2_TARGET_GENERIC_ROOT_PASSWD="lyra"` nei due
-   defconfig. Va bene per il bring-up, **non** per qualcosa che esce
-   dall'ufficio: ogni progetto creato da questo template nascerebbe con la
-   stessa password nota. Cambiala subito, o metti
-   `# BR2_TARGET_ENABLE_ROOT_LOGIN is not set` se il progetto non ha bisogno
-   di login da seriale.
-2. **Nome e identita' del progetto**: titolo di questo README,
-   `BR2_TARGET_GENERIC_HOSTNAME` e `BR2_TARGET_GENERIC_ISSUE` nei defconfig.
-3. **La tua applicazione**, accanto a `hello-lyra`: copia
-   `external/package/hello-lyra/` come punto di partenza, e aggiungi il tuo
-   `source` in `external/Config.in`.
+```
+template (pubblico, stabile)  ──▶  repo privato (display, audio, rete, ...)
+        ▲                                    │
+        └──── solo miglioramenti alla base ──┘
+```
 
-Cosa **non** cambiare:
+Cosa trovi gia' funzionante:
 
-- **`hello-lyra` conviene tenerla.** Non e' un esempio da buttare: e' la
-  diagnostica che ha chiuso due TODO aperti su questa board, leggendo modello,
-  memoria, CMA e partizioni MTD. Su un progetto nuovo e' la prima cosa da
-  lanciare quando qualcosa non parte, e costa 1,7 MB.
-- `docs/BOARD-FACTS.md` e `docs/traces/`: sono i fatti misurati di questa
-  board, con la fonte di ogni valore. Riscriverli da zero sarebbe rifare la
-  ricognizione.
+- build riproducibile in container, da `./setup.sh && make lyra_plus_defconfig && make`
+- immagini flashabili: `update.img` e le singole partizioni
+- console seriale su `ttyFIQ0`, shell di root
+- accesso `adb` via USB
+- `hello-lyra`, che al boot dice se la board e' quella giusta e cosa vede
+- una variante `initramfs` per il bring-up senza dipendere dalla NAND
+
+Cosa cambiare appena forkato:
+
+1. **Titolo di questo README** e `BR2_TARGET_GENERIC_HOSTNAME` /
+   `BR2_TARGET_GENERIC_ISSUE` nei defconfig.
+2. **La tua applicazione**, accanto o al posto di `hello-lyra`: copia
+   `external/package/hello-lyra/` come scheletro e aggiungi il tuo `source`
+   in `external/Config.in`.
+
+`BR2_TARGET_GENERIC_ROOT_PASSWD="lyra"` resta **volutamente banale**: qui serve
+una shell in tre secondi. Mettere una password seria, o togliere il login da
+seriale, e' compito del progetto che nasce dal fork, non di questa base.
+
+### Cosa NON deve finire qui
+
+Il template si logora se ci si accumulano cose di un progetto specifico.
+Restano fuori: driver e device tree di una periferica particolare, package
+applicativi, tuning per un caso d'uso, e le tracce di lavorazione di un
+porting. Se una cosa serve a *un* progetto, vive nel repo privato di quel
+progetto. Se serve a *tutti* i progetti su questa board, allora sale qui.
+
+Per il display, che e' l'esempio tipico: il fragment `rk3506-display.config`
+del kernel vendor **non** e' applicato, e il DTS di board riserva 32 MiB di CMA
+che oggi nessuno usa. Le due cose vanno accese insieme, nel repo del progetto.
+Il perche' e i numeri sono in [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md).
 
 Se un giorno serve portare **un'altra board Rockchip** e non un altro progetto
-sulla stessa, il lavoro e' diverso: `post-image.sh` ha `RK3506MINIALL.ini`,
+su questa, il lavoro e' diverso: `post-image.sh` ha `RK3506MINIALL.ini`,
 `RK3506TOS.ini` e `rk3506_ddr_750MHz_v1.04.bin` scritti dentro, e
-`BOARD-FACTS.md` andrebbe svuotato e rifatto. Conviene partire da un template
-dedicato, non da qui.
+`BOARD-FACTS.md` andrebbe rifatto da capo. Meglio un template dedicato.
 
 ### Controlli automatici
 
@@ -80,7 +95,6 @@ siano link morti fra i documenti.
 che non e' pubblico. Per la stessa ragione `docs/check-artifacts.sh` non gira
 in CI — senza build non ci sono artefatti — e resta un comando da lanciare a
 mano dopo aver alzato uno SHA o toccato `post-image.sh`.
-
 
 ## Indice
 
@@ -105,7 +119,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
 ├── setup.sh                      prepara il clone (submodule, SDK, immagine docker)
 ├── Makefile                      wrapper: make shell / defconfig / build
 ├── docker/Dockerfile             Ubuntu 22.04, unico posto dove si compila
-├── docs/                         tutto il resto della documentazione
+├── docs/                         riferimento di board, scelte, strumenti
 ├── buildroot/                    submodule upstream, tag 2026.02.3 (LTS)
 └── external/
     ├── Config.in                 opzioni della board (path rkbin, tool di packaging)

@@ -11,10 +11,11 @@ Convenzioni di percorso in questo documento:
 | `$SDK`  | `~/git/luckfox-lyra`      | `/sdk`    |
 | `$WORK` | `~/git/rk3506-framework`  | `/work`   |
 
-Trace di riferimento prodotti da questa ricognizione (in `$WORK`):
+Trace di riferimento prodotti da questa ricognizione. Nel seguito sono citati
+per numero di riga nella forma abbreviata `build-trace.log:4056`:
 
-* `build-trace.log` — `env SHELLOPTS=xtrace bash ./build.sh` (target default `all`)
-* `build-trace-pack.log` — `env SHELLOPTS=xtrace bash ./build.sh firmware updateimg`
+* `docs/traces/build-trace.log` — `env SHELLOPTS=xtrace bash ./build.sh` (target default `all`)
+* `docs/traces/build-trace-pack.log` — `env SHELLOPTS=xtrace bash ./build.sh firmware updateimg`
 
 > `SHELLOPTS=xtrace` va iniettato con `env`: in bash `SHELLOPTS` è **readonly**,
 > quindi `SHELLOPTS=xtrace bash -x ./build.sh` fallisce. Serve iniettarlo
@@ -404,9 +405,9 @@ CREATE_IDB=true
 Metodo (come da specifica, con la correzione su `SHELLOPTS`):
 
 ```bash
-cd /sdk && env SHELLOPTS=xtrace bash ./build.sh > /work/build-trace.log 2>&1
+cd /sdk && env SHELLOPTS=xtrace bash ./build.sh > /work/docs/traces/build-trace.log 2>&1
 cd /sdk && env SHELLOPTS=xtrace bash ./build.sh firmware updateimg \
-                                     > /work/build-trace-pack.log 2>&1
+                                     > /work/docs/traces/build-trace-pack.log 2>&1
 ```
 
 > Il primo run è arrivato fino a `boot.img` incluso e poi si è fermato allo
@@ -663,7 +664,7 @@ TAG=RK$(hexdump -s 21 -n 4 -e '4 "%c"' MiniLoaderAll.bin | rev)     # -> RK350F
 | Yocto | `python3` | `common/scripts/check-yocto.sh:12-17` |
 
 **Verificato empiricamente**: eseguendo `build.sh` su un host senza `python2`,
-la build si ferma esattamente lì (`build-trace.log`, primo run):
+la build si ferma esattamente lì (`docs/traces/build-trace.log`, primo run):
 
 ```
 + /sdk/device/rockchip/common/scripts/check-loader.sh
@@ -788,7 +789,7 @@ ciò che serve è presente in upstream a quel livello:
 | ~~**2**~~ | ✅ **Risolto** | Gli SHA pinnati sono la tip del branch `luckfox-linux-6.1-rk3506` su entrambi i mirror, quindi raggiungibili da un ref. | — | Resta consigliato pushare anche i tag `vendor-*`: se un domani il branch si sposta, il pin sopravvive solo grazie al tag. |
 | ~~**3**~~ | ✅ **Risolto** | Il blob DDR arriva da un path configurabile (`BR2_LYRA_RKBIN_DIR`), non è copiato nel repo, e `post-image.sh` ne verifica lo sha256 contro `board/lyra-plus/rkbin.sha256` fermandosi se non combacia. | — | Verificato in entrambi i versi: passa sul rkbin buono, fallisce su un hash alterato. |
 | **4** | 🟠 Alta | `TODO(verify):` per **SPI NAND**, a quale offset il BootROM RK3506 si aspetta l'IDB/loader? Accertato solo che i primi 4 MiB sono riservati (nessuna partizione in `parameter.txt`) e che per SD/eMMC è il settore 64. | Serve per documentare il flash manuale e per validare che `post-image.sh` produca un layout scrivibile. | Leggere `docs/{cn,en}/Linux/ApplicationNote/Rockchip_Developer_Guide_Linux_Flash_Open_Source_Solution_*.pdf` (presenti in `$SDK/docs/`), o dumpare la NAND di una board già funzionante. |
-| **5** | 🟡 Media | **Parzialmente risolto dal boot reale.** Confermato: `erasesize` = **128 KiB** su tutte le partizioni, `uboot` = 4 MiB e `boot` = 12 MiB esatti come in `parameter.txt`. `TODO(verify):` resta la dimensione totale del chip. `rootfs` risulta **223 MiB**, non i 224 attesi da `-@0x10000` su 256 MiB: manca 1 MiB e non e' chiaro dove vada. | Solo la geometria UBI, gia' confermata corretta dal fatto che il rootfs monta. | Rilanciare `hello-lyra` dopo questo commit: ora stampa le dimensioni MTD a tre decimali e in esadecimale, piu' il totale, invece di arrotondare. |
+| ~~**5**~~ | ✅ **Risolto** | Misurato sulla board: `erasesize` **128 KiB** ovunque, page **2048 B** (implicita in `vid_hdr_offset=2048` di una UBI che monta), chip **256 MiB**. `rootfs` = `0x0df60000` (223.375 MiB) a offset 32 MiB, cioe' finisce a 255.375 MiB: restano 640 KiB (5 blocchi) non coperti da `mtdparts`. | — | La geometria UBI del defconfig e' confermata corretta. Il perche' di quei 640 KiB non e' accertato — **non e' il vendor storage, che sta a offset 0 e occupa 64 KiB** (`vendor.c:42,47`) — ma sono lo 0.25% del chip e il rootfs funziona: curiosita', non problema. |
 | ~~**6**~~ | ✅ **Risolto** | La console e' su UART0 come dice il DTS: la board risponde su `ttyFIQ0` a 1500000 8N1 e `hello-lyra` stampa dalla seriale. Il DTB caricato e' quello giusto — `/proc/device-tree/model` riporta `Luckfox Lyra Plus`. | — | La serigrafia "UART2" nello `flash.sh` dell'SDK era fuorviante. |
 | **7** | 🟢 Bassa | `TODO(verify):` quanti commit di divergenza ha il Buildroot dell'SDK rispetto a `2024.02`? | Solo documentale: la decisione (non riportare nulla) è già presa sulla base della diff ad albero. | Impossibile in locale (`depth=1`). Serve un clone completo dal remote di TODO-1. |
 | **8** | 🟢 Bassa | ~~Replicare l'AMP locale?~~ **DECISO: no.** La Fase 2 usa il baseline vendor: solo Linux, partizioni `uboot`/`boot`/`rootfs`. | — | Se servirà, il delta è documentato in §0 e §1b di questo file. |
@@ -929,11 +930,16 @@ Verificato dopo la pubblicazione dei mirror:
   con `fdtget` su entrambi
 - `rootfs.img` ha la stessa geometria UBI (`vid_hdr_offset=2048`, `data_offset=4096`)
 - `hello-lyra` nel rootfs è un ELF ARM 32-bit statically linked
+- **il boot reale su hardware funziona**: la board parte, la console seriale
+  risponde e `hello-lyra` gira
 
 **Non** ancora verificato:
 
-- il boot reale su hardware
 - `./setup.sh` da un clone davvero pulito (è stato eseguito su questo albero)
+
+Gli invarianti di forma degli artefatti sono ora controllabili in automatico
+con `docs/check-artifacts.sh`, da rilanciare dopo ogni cambio di SHA o di
+`post-image.sh`.
 
 ---
 
@@ -1017,7 +1023,7 @@ Output di `hello-lyra` sulla seriale, board che parte da SPI NAND.
 | kernel | `6.1.99` | il mirror `rk3506-kernel` serve il commit atteso |
 | `mtd0 uboot` | 4 MiB, erase 128 KiB | combacia con `parameter.txt` (`0x2000` settori) |
 | `mtd1 boot` | 12 MiB, erase 128 KiB | combacia con `parameter.txt` (`0x6000` settori) |
-| `mtd2 rootfs` | 223 MiB, erase 128 KiB | monta e il sistema parte |
+| `mtd2 rootfs` | 223.375 MiB (`0x0df60000`), erase 128 KiB | monta e il sistema parte |
 | `erasesize` | **128 KiB** ovunque | `BR2_TARGET_ROOTFS_UBI_PEBSIZE=0x20000` è giusto — era l'assunzione più rischiosa di tutto il porting |
 | console | `ttyFIQ0`, 1500000 8N1 | chiude TODO-6 |
 
@@ -1027,12 +1033,18 @@ fosse stato da 256 KiB il rootfs non avrebbe montato.
 
 ### Due cose che non tornano
 
-**1. `rootfs` è 223 MiB, non 224.** Con `-@0x10000(rootfs:grow)` la partizione
-parte a 32 MiB e prende il resto; su un chip da 256 MiB dovrebbero essere 224.
-Manca 1 MiB. Vedi TODO-5: `hello-lyra` ora stampa le dimensioni a tre decimali
-e in esadecimale, più la somma, cosa che l'arrotondamento a `%.0f` nascondeva.
+**1. ~~`rootfs` è 223 MiB, non 224.~~ Chiuso.** Con le cifre esatte il conto si
+fa: `rootfs` è `0x0df60000` a offset 32 MiB, quindi finisce a 255.375 MiB su un
+chip da 256 MiB. Restano **640 KiB, cioè 5 blocchi da 128 KiB**, non coperti da
+`mtdparts`. Non è il vendor storage, che sta a offset 0 e occupa 64 KiB
+(`vendor.c:42,47`). Il perché esatto resta ignoto, ma sono lo 0.25% del chip e
+il rootfs funziona: curiosità, non problema. Vale la pena notare che
+l'arrotondamento a `%.0f` di `hello-lyra` nascondeva proprio la cifra che
+permetteva di chiudere la questione.
 
-**2. `MemTotal` = 89 216 kB (87,1 MiB), che è poco.** Il DTS di board fa:
+**2. `MemTotal` = 89 216 kB (87,1 MiB), che è poco.** Confermato e approfondito
+nella sezione [32 MiB di RAM fermi in un CMA che non usiamo](#32-mib-di-ram-fermi-in-un-cma-che-non-usiamo).
+Il DTS di board fa:
 
 ```
 /**********display**********/
@@ -1045,12 +1057,61 @@ mentre il default nel dtsi è `size = <0x0>`. Quindi il DTS vendor riserva
 **32 MiB di CMA per il VOP** — e questo albero il display non lo costruisce
 (`linux.config` non applica `rk3506-display.config`).
 
-Attenzione a non concludere troppo in fretta: una regione CMA `reusable` di
-norma **è** contata dentro `MemTotal`, quindi non è automatico che quei 32 MiB
-spieghino il numero basso. Per questo `hello-lyra` ora riporta anche
-`CmaTotal` e `CmaFree`: se `CmaTotal` è 32 MiB e `MemTotal` li include, il
-sospetto cade; se `CmaTotal` è 0, la memoria è stata tolta prima e conviene
-azzerare `&cma` in un DTS di board nostro.
+La misura successiva ha dato `CmaTotal = 32 MiB` e `CmaFree = 0`: il sospetto
+regge. Dettaglio e conti nella sezione dedicata.
 
-`TODO(verify):` quanta DDR monta davvero questa Lyra Plus, e quanto ne
-recuperiamo azzerando il CMA che non usiamo.
+---
+
+## 32 MiB di RAM fermi in un CMA che non usiamo
+
+Misurato da `hello-lyra` sulla board:
+
+```
+MemTotal:      87.1 MiB (89216 kB)
+CmaTotal:      32.0 MiB (32768 kB)
+CmaFree:        0.0 MiB (0 kB)
+```
+
+`CmaTotal` è **esattamente** il valore che il DTS di board scrive:
+
+```
+/**********display**********/
+&cma {
+        size = <0x2000000>;     /* 32 MiB */
+};
+```
+
+mentre il default nel dtsi è `size = <0x0>`. Quel CMA esiste per il VOP, e
+questo albero il display non lo costruisce: `board/lyra-plus/linux.config` non
+applica `rk3506-display.config`.
+
+`CmaFree = 0` è la parte che conta. Se quei 32 MiB fossero regolarmente entrati
+nel buddy allocator come `MIGRATE_CMA`, sarebbero quasi tutti liberi e
+utilizzabili come memoria normale, e il CMA sarebbe innocuo. Con `CmaFree = 0`
+non lo sono: nessuno li sta usando (non c'è display) ma non sono nemmeno
+disponibili.
+
+I conti tornano con l'ipotesi "riservati e mai restituiti al sistema": se la
+board monta 128 MiB di DDR,
+
+    128.000 MiB  DDR
+   - 32.000 MiB  CMA
+   -  ~8.9 MiB   kernel, page table, mem_map, trust@0, ramoops
+   ------------
+     87.1  MiB   = MemTotal misurato
+
+`TODO(verify):` la DDR è davvero 128 MiB? Il dato definitivo è la riga che il
+kernel stampa al boot, che dà totale e ripartizione in un colpo solo:
+
+```
+dmesg | grep -i '^\[.*\] Memory:'
+# es. Memory: 89216K/131072K available (... reserved, 32768K cma-reserved)
+```
+
+Se confermato, azzerare `&cma` in un DTS di board nostro restituisce **32 MiB
+su 128, cioè il 37% di RAM utilizzabile in più**. Il meccanismo esiste già:
+`BR2_LINUX_KERNEL_CUSTOM_DTS_PATH`, usato per la variante initramfs.
+
+Da non fare alla cieca: chi un domani accende il display si ritrova senza
+memoria contigua e con un VOP che non alloca framebuffer. La scelta va legata
+al fragment display, non presa una volta per tutte.

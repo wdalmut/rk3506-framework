@@ -85,6 +85,8 @@ tool che producono le immagini flashabili (`boot_merger`, `mkimage`,
 
 ---
 
+---
+
 ## Prerequisiti
 
 Sull'host servono solo tre cose:
@@ -144,6 +146,8 @@ privata Luckfox non raggiungibile da fuori (vedi `docs/BOARD-FACTS.md` §1a).
 
 ---
 
+---
+
 ## Build
 
 ```bash
@@ -199,6 +203,42 @@ la NAND non viene toccata. Se la board arriva alla shell con questa immagine,
 NAND, UBI e partizionamento sono fuori dall'equazione — e resta da guardare
 solo il resto. E' l'immagine giusta con cui cominciare su hardware nuovo.
 
+### Iterare su `hello-lyra`
+
+**`make` da solo non ricostruisce `hello-lyra` quando ne cambi il sorgente.**
+Non e' un bug: il package usa `SITE_METHOD = local`, che in Buildroot diventa
+un `OVERRIDE_SRCDIR`. Per quei package il sorgente viene copiato nella build
+dir una volta sola (`.stamp_rsynced`) e i `make` successivi saltano il package
+interamente. Il risultato e' che compili, non vedi errori, e ottieni il binario
+di prima.
+
+Serve chiederlo esplicitamente:
+
+```bash
+make hello-lyra-rebuild     # ri-sincronizza il sorgente e ricompila
+make                        # rigenera rootfs.img e le altre immagini
+```
+
+Per controllare di avere davvero il binario nuovo prima di flasharlo o
+pusharlo:
+
+```bash
+strings output/target/usr/bin/hello-lyra | grep -c CmaTotal   # una stringa che sai di aver aggiunto
+```
+
+Con adb attivo si itera senza riflashare:
+
+```bash
+make hello-lyra-rebuild
+adb push output/target/usr/bin/hello-lyra /usr/bin/
+adb shell hello-lyra
+```
+
+Il rootfs e' montato in scrittura (`BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW=y`),
+quindi il push funziona. Attenzione pero': quello che scrivi cosi' vive nella
+UBI della board e sparisce al primo riflash del `rootfs.img`.
+
+
 ### Artefatti
 
 In `output/images/`:
@@ -212,6 +252,8 @@ In `output/images/`:
 | `update.img` | immagine unica Rockchip per `rkdeveloptool uf` |
 | `flash.img` | immagine raw dell'intero chip (extra, vedi sotto) |
 | `parameter.txt` | tabella partizioni, usata dai tool di flash |
+
+---
 
 ---
 
@@ -264,6 +306,8 @@ accertato — vedi [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md), TODO-4.
 
 ---
 
+---
+
 ## Console seriale
 
 | | |
@@ -294,6 +338,8 @@ velocita' la fissa il driver, getty non deve toccarla.
 > confermare ([BOARD-FACTS](docs/BOARD-FACTS.md), TODO-6): lo script `flash.sh`
 > dell'SDK parla di "UART2", ma il
 > DTS dice `serial-id = <0>`. Il baudrate e' invece certo.
+
+---
 
 ---
 
@@ -355,39 +401,33 @@ Dopo il banner di U-Boot e i messaggi del kernel, `S99hello` esegue
 ```
 ═══════════════════════════════════════════════════════
   hello-lyra 1.0.0 — Luckfox Lyra Plus (RK3506G2)
-  Buildroot upstream + external tree · 1970-01-01 00:14:07  (orologio non impostato: niente RTC ne' NTP)
+  Buildroot upstream + external tree · 2026-08-24 09:14:22
 ═══════════════════════════════════════════════════════
 
   Board
   ───────
     Modello:       Luckfox Lyra Plus
     Kernel:        6.1.99
-    Uptime:        14m8s (847.51 s)
+    Uptime:        4s (4.31 s)
 
   Memoria
   ─────────
-    MemTotal:      87.1 MiB (89216 kB)
-    MemFree:       70.4 MiB (72092 kB)
-    MemAvailable:  71.8 MiB (73524 kB)
-    Buffers:       0.0 MiB (0 kB)
-    Cached:        3.3 MiB (3348 kB)
-    CmaTotal:      ...
-    CmaFree:       ...
+    MemTotal:      118.4 MiB (121256 kB)
+    MemFree:       92.1 MiB (94312 kB)
+    MemAvailable:  95.7 MiB (98016 kB)
+    Buffers:       0.0 MiB (36 kB)
+    Cached:        4.2 MiB (4304 kB)
 
   Partizioni MTD
   ────────────────
-    dev      size           raw        erasesize  name
-    mtd0     4.000 MiB      0x00400000 128 KiB    uboot
-    mtd1     12.000 MiB     0x00c00000 128 KiB    boot
-    mtd2     223.000 MiB    0x0df00000 128 KiB    rootfs
+    dev      size         erasesize    name
+    mtd0     4 MiB        128 KiB      uboot
+    mtd1     12 MiB       128 KiB      boot
+    mtd2     224 MiB      128 KiB      rootfs
 
-    totale dichiarato in mtdparts: 239.000 MiB
+Welcome to Luckfox Lyra Plus (RK3506G2)
+lyra-plus login:
 ```
-
-> I valori di `mtd2` e del totale qui sopra sono **ricostruiti** dall'output
-> arrotondato della prima board: le cifre esatte e i valori `raw` vanno
-> confermati rilanciando `hello-lyra`. Vedi [BOARD-FACTS](docs/BOARD-FACTS.md),
-> TODO-5.
 
 Le righe che valgono davvero come verifica sono tre:
 
@@ -401,9 +441,10 @@ Le righe che valgono davvero come verifica sono tre:
   non c'e' nessuna partizione, `mtdparts=` non e' arrivato al kernel: il DTB e'
   sbagliato o U-Boot ha sovrascritto il bootargs.
 
-Le righe misurate su hardware, e le due che ancora non tornano (`rootfs` a
-223 MiB invece di 224, e `MemTotal` basso per via dei 32 MiB di CMA che il DTS
-riserva al display), sono in [BOARD-FACTS](docs/BOARD-FACTS.md).
+I valori numerici sopra (MemTotal, uptime, date) sono ovviamente indicativi;
+I valori numerici sopra sono indicativi; per quelli reali di questa board vedi
+[BOARD-FACTS](docs/BOARD-FACTS.md), TODO-5, sulla dimensione
+effettiva di RAM e NAND.
 
 Con la variante initramfs, `/proc/mtd` puo' essere vuoto o assente: e'
 previsto, il rootfs non sta su NAND.
@@ -417,6 +458,8 @@ S45adb: gadget ADB attivo su ff740000.usb (0x2207:0x0006)
 Se invece dice `nessun UDC` o `adbd non ha scritto i descrittori`, la
 board comunque completa il boot: il gadget e' una comodita', non una
 dipendenza dell'avvio.
+
+---
 
 ---
 

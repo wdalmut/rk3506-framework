@@ -6,9 +6,9 @@
 # post-image.sh — riproduce la catena di packaging Rockchip che build.sh
 # esegue dopo la compilazione, e che Buildroot non conosce.
 #
-# Riferimento: docs/BOARD-FACTS.md §1c, ricostruito da un trace
-# `env SHELLOPTS=xtrace bash ./build.sh` dell'SDK Luckfox. Ogni passo qui
-# sotto cita la riga del trace da cui e' stato derivato.
+# Riferimento: docs/BOARD-FACTS.md §1c, ricostruito dai trace in docs/traces/,
+# prodotti con `env SHELLOPTS=xtrace bash ./build.sh` sull'SDK Luckfox.
+# Ogni passo qui sotto cita la riga del trace da cui e' stato derivato.
 #
 # Ordine (identico a quello dell'SDK):
 #   1. loader + uboot.img   <- u-boot/scripts/fit.sh -> rkbin: boot_merger, mkimage

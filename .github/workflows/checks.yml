@@ -26,7 +26,7 @@ jobs:
     # diff spurio da spiegare.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: dipendenze di kconfig
@@ -58,7 +58,7 @@ jobs:
   scripts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: sintassi degli script
         run: |
           set -euo pipefail
@@ -87,7 +87,7 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with: { go-version: 'stable' }
       - name: gofmt, vet e cross-compile ARMv7
@@ -105,16 +105,26 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: nessun link morto fra i documenti
         run: |
-          set -euo pipefail
+          set -uo pipefail
           rc=0
           for f in README.md docs/*.md; do
             dir="$(dirname "$f")"
-            grep -ohE '\]\([^)#]+(#[^)]*)?\)' "$f" | sed 's/^](//; s/)$//; s/#.*//' | while read -r l; do
-              case "$l" in http*|"") continue;; esac
-              [ -e "$dir/$l" ] || { echo "::error file=$f::link morto: $l"; exit 1; }
-            done || rc=1
+            for l in $(grep -ohE '\]\([^)#]+(#[^)]*)?\)' "$f" | sed 's/^](//; s/)$//; s/#.*//'); do
+              case "$l" in
+                # link esterni
+                http*|"") continue ;;
+                # link relativi a GitHub, non al filesystem: "../../releases" e
+                # "../../issues" risolvono rispetto all'URL del repository, non
+                # a una directory. Non sono verificabili qui, e non sono errori.
+                ../../*) continue ;;
+              esac
+              if [ ! -e "$dir/$l" ]; then
+                echo "::error file=$f::link morto: $l"
+                rc=1
+              fi
+            done
           done
           exit $rc

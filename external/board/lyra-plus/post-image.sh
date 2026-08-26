@@ -43,6 +43,31 @@ TOPDIR="$(cd "$BOARD_DIR/../../.." && pwd)"
 # default e' relativo e punta al submodule 'vendor'.
 abspath() { case "$1" in ""|/*) printf '%s' "$1";; *) printf '%s' "$TOPDIR/$1";; esac; }
 
+# Directory di build di un package, per nome.
+#
+# Non basta `find -name 'linux-*' | head -1`: cambiando defconfig nello
+# stesso output/ i vecchi alberi restano, e con due kernel diversi (vendor
+# 6.1 e mainline 6.19, che hanno SHA diversi e quindi directory diverse)
+# `head -1` prenderebbe quello sbagliato in modo non deterministico —
+# producendo un boot.img con il DTB di un kernel e lo zImage dell'altro.
+# I due DTB NON sono interscambiabili: gli ID clock dei dt-bindings sono
+# rinumerati fra 6.1 vendor e mainline, quindi l'errore sarebbe silenzioso.
+#
+# Con BR2_*_CUSTOM_GIT il nome della directory e' "<pkg>-<REPO_VERSION>",
+# quindi il .config dice esattamente quale prendere. Il find resta come
+# ripiego per le configurazioni non-git (tarball, versione upstream).
+pkgdir() {
+	local pkg="$1" ver_symbol="$2" ver dir
+	ver="$(cfg "$ver_symbol")"
+	if [ -n "$ver" ] && [ -d "$BUILD_DIR/$pkg-$ver" ]; then
+		printf '%s' "$BUILD_DIR/$pkg-$ver"
+		return
+	fi
+	dir="$(find "$BUILD_DIR" -maxdepth 1 -type d \
+		-name "$pkg-*" ! -name "$pkg-headers*" | sort | head -1)"
+	printf '%s' "$dir"
+}
+
 RKBIN_DIR="$(abspath "$(cfg BR2_LYRA_RKBIN_DIR)")"
 PACKTOOL_DIR="$(abspath "$(cfg BR2_LYRA_PACKTOOL_DIR)")"
 
@@ -98,7 +123,7 @@ fi
 # ---------------------------------------------------------------------------
 # u-boot/make.sh vuole rkbin come directory FRATELLO: prepare() controlla
 # `-d ../rkbin` e aborta con "ERROR: No ../rkbin repository" (make.sh:105).
-UBOOT_DIR="$(find "$BUILD_DIR" -maxdepth 1 -type d -name 'uboot-*' | head -1)"
+UBOOT_DIR="$(pkgdir uboot BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
 [ -n "$UBOOT_DIR" ] || die "directory di build di U-Boot non trovata sotto $BUILD_DIR"
 
 # Serve una COPIA, non un symlink: la catena vendor scrive dentro rkbin.
@@ -166,7 +191,7 @@ install -m 0644 "$UBOOT_DIR/uboot.img" "$BINARIES_DIR/uboot.img"
 # ---------------------------------------------------------------------------
 # 2. resource.img
 # ---------------------------------------------------------------------------
-LINUX_DIR="$(find "$BUILD_DIR" -maxdepth 1 -type d -name 'linux-*' ! -name 'linux-headers*' | head -1)"
+LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 [ -n "$LINUX_DIR" ] || die "directory di build del kernel non trovata sotto $BUILD_DIR"
 
 RESOURCE_TOOL="$LINUX_DIR/scripts/resource_tool"

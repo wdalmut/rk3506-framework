@@ -10,10 +10,19 @@
 # Il binario adbd viene da Buildroot upstream (BR2_PACKAGE_ANDROID_TOOLS_ADBD),
 # non dal package android-adbd aggiunto dal vendor.
 #
-# Il kernel ha gia' tutto, dal defconfig vendor:
+# Il kernel VENDOR ha gia' tutto, dal suo defconfig:
 #     CONFIG_USB_DWC2=y  CONFIG_USB_GADGET=y  CONFIG_CONFIGFS_FS=y
 #     CONFIG_USB_CONFIGFS=y  CONFIG_USB_CONFIGFS_F_FS=y
 # e il DTS mette usb20_otg0 in dr_mode = "peripheral".
+#
+# QUESTO OVERLAY E' CONDIVISO fra i defconfig, e con
+# lyra_plus_mainline_initramfs_defconfig niente di quanto sopra e' vero:
+# linux-mainline.config spegne CONFIG_USB_SUPPORT, il dtsi minimale non ha
+# un nodo USB e BR2_PACKAGE_ANDROID_TOOLS non e' selezionato, quindi
+# /usr/bin/adbd non esiste. Lo script se ne accorge alla prima riga di
+# start() e ritorna 0: stampa una riga e non tocca niente. Non fallisce, non
+# ritarda il boot, non sporca la console con errori. Il criterio e' che
+# nessuno script dell'overlay possa rompersi in nessuno dei tre defconfig.
 #
 # ORDINE DELLE OPERAZIONI: NON E' ARBITRARIO
 # Con functionfs il demone in user space deve scrivere i descrittori su ep0

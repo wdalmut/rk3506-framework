@@ -29,10 +29,36 @@ fi
 	fi
 } > "$TARGET_DIR/etc/lyra-release"
 
-# La console e' ttyFIQ0 (fiq-debugger Rockchip su UART0 @ 0xff0a0000).
 # Buildroot genera la riga di inittab da BR2_TARGET_GENERIC_GETTY_PORT, ma
-# securetty non lo conosce: senza questa riga il login di root sulla
-# seriale viene rifiutato.
-if [ -f "$TARGET_DIR/etc/securetty" ] && ! grep -qx 'ttyFIQ0' "$TARGET_DIR/etc/securetty"; then
-	echo 'ttyFIQ0' >> "$TARGET_DIR/etc/securetty"
+# securetty non conosce le console fuori standard: senza la riga
+# corrispondente, il login di root sulla seriale viene rifiutato
+# ("root login refused on this terminal").
+#
+# La porta NON e' cablata, perche' questo script e' condiviso fra i
+# defconfig e ognuno ha la sua console:
+#
+#   lyra_plus_defconfig            ttyFIQ0  fiq-debugger vendor su UART0
+#   lyra_plus_initramfs_defconfig  ttyFIQ0  idem
+#   lyra_plus_mainline_..._defconfig  ttyS0  mainline non ha il fiq-debugger
+#                                           (CONFIG_FIQ_DEBUGGER e' vendor-only)
+#
+# NOTA, verificata su questo albero: /etc/securetty NON viene creato ne'
+# dallo skeleton di Buildroot ne' da BusyBox, quindi oggi il blocco qui
+# sotto e' un no-op in tutti e tre i defconfig e il login di root passa
+# perche' `login` di BusyBox controlla securetty solo se il file esiste.
+# Resta perche' basta un package (shadow, util-linux con login) per farlo
+# comparire, e allora la riga giusta deve esserci: quando succedera' sara'
+# quella della console effettiva, non "ttyFIQ0" cablato.
+GETTY_PORT=""
+if [ -r "${BR2_CONFIG:-/dev/null}" ]; then
+	GETTY_PORT="$(sed -n 's/^BR2_TARGET_GENERIC_GETTY_PORT="\(.*\)"$/\1/p' "$BR2_CONFIG" | tail -1)"
+fi
+
+if [ -z "$GETTY_PORT" ]; then
+	# Non e' fatale: significa solo che il login di root sulla seriale
+	# potrebbe essere rifiutato. Meglio dirlo che fallire la build.
+	echo "post-build.sh: BR2_TARGET_GENERIC_GETTY_PORT non leggibile, securetty non aggiornato" >&2
+elif [ -f "$TARGET_DIR/etc/securetty" ] \
+     && ! grep -qx "$GETTY_PORT" "$TARGET_DIR/etc/securetty"; then
+	echo "$GETTY_PORT" >> "$TARGET_DIR/etc/securetty"
 fi

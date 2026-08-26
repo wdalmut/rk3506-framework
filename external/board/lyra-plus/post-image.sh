@@ -78,8 +78,13 @@ TARGET_CC="$(ls "$HOST_DIR"/bin/*-linux-*-gcc 2>/dev/null | head -1)"
 [ -n "$TARGET_CC" ] || die "toolchain target non trovata in $HOST_DIR/bin"
 TARGET_CROSS="${TARGET_CC%gcc}"
 
-# Nome del DTB: in-tree per lyra_plus_defconfig, custom per la variante
-# initramfs. Uno solo dei due e' impostato.
+# Nome del DTB. Uno solo dei due simboli e' impostato:
+#   lyra_plus_defconfig                       in-tree, "rk3506g-luckfox-lyra-plus"
+#   lyra_plus_initramfs_defconfig             custom,  dts/rk3506g-lyra-plus-initramfs.dts
+#   lyra_plus_mainline_initramfs_defconfig    in-tree, "rockchip/rk3506g-luckfox-lyra-plus"
+# Il terzo ha lo slash: in mainline i DTS rockchip stanno in una
+# sottodirectory. Funziona senza casi speciali perche' il nome viene
+# concatenato a "arch/arm/boot/dts/" piu' sotto.
 DTB_NAME="$(cfg BR2_LINUX_KERNEL_INTREE_DTS_NAME)"
 if [ -z "$DTB_NAME" ]; then
 	CUSTOM_DTS="$(cfg BR2_LINUX_KERNEL_CUSTOM_DTS_PATH)"
@@ -194,9 +199,44 @@ install -m 0644 "$UBOOT_DIR/uboot.img" "$BINARIES_DIR/uboot.img"
 LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 [ -n "$LINUX_DIR" ] || die "directory di build del kernel non trovata sotto $BUILD_DIR"
 
+# resource_tool: due provenienze, in quest'ordine.
+#
+#  1. $LINUX_DIR/scripts/resource_tool — il kernel VENDOR 6.1 lo compila da
+#     se', perche' scripts/Makefile:9 lo dichiara
+#     hostprogs-always-$(CONFIG_ARCH_ROCKCHIP). Percorso storico, resta il
+#     preferito: se il kernel lo ha, si usa il suo.
+#  2. $HOST_DIR/bin/resource_tool — host package rk-resource-tool
+#     (BR2_PACKAGE_HOST_RK_RESOURCE_TOOL). Serve al kernel MAINLINE, che non
+#     ha ne' la riga di Makefile ne' il file: scripts/resource_tool.c non e'
+#     mai stato mandato upstream.
+#
+# resource.img non e' opzionale, e non e' "solo per i logo": U-Boot legge il
+# DTB del kernel da la'. Con CONFIG_ROCKCHIP_RESOURCE_IMAGE=y (attivo in
+# questo build) il ramo che leggerebbe il DTB dal nodo `fdt` del FIT e'
+# compilato via:
+#     arch/arm/mach-rockchip/boot_rkimg.c:517
+#       #if defined(CONFIG_ROCKCHIP_FIT_IMAGE) && !defined(CONFIG_ROCKCHIP_RESOURCE_IMAGE)
+# Senza il nodo `multi`, fit_image_init_resource() ritorna -EINVAL
+# (fit.c:453-455) e il boot muore con "No valid DTB" (boot_rkimg.c:536).
 RESOURCE_TOOL="$LINUX_DIR/scripts/resource_tool"
-[ -x "$RESOURCE_TOOL" ] || die "scripts/resource_tool non compilato in $LINUX_DIR
-    (e' hostprogs-always-\$(CONFIG_ARCH_ROCKCHIP): il kernel non e' quello vendor?)"
+RESOURCE_TOOL_FROM="kernel ($LINUX_DIR/scripts)"
+if [ ! -x "$RESOURCE_TOOL" ]; then
+	RESOURCE_TOOL="$HOST_DIR/bin/resource_tool"
+	RESOURCE_TOOL_FROM="host package rk-resource-tool"
+fi
+[ -x "$RESOURCE_TOOL" ] || die "resource_tool non trovato, ne' nel kernel ne' fra gli host tool.
+    Cercato in:
+      $LINUX_DIR/scripts/resource_tool
+          c'e' solo con il kernel vendor 6.1, che lo dichiara
+          hostprogs-always-\$(CONFIG_ARCH_ROCKCHIP) in scripts/Makefile:9
+      $HOST_DIR/bin/resource_tool
+          lo installa l'host package rk-resource-tool
+    Con un kernel mainline serve il secondo: abilita
+    BR2_PACKAGE_HOST_RK_RESOURCE_TOOL=y nel defconfig.
+    Non e' aggirabile togliendo il nodo 'resource' da boot.its: con
+    CONFIG_ROCKCHIP_RESOURCE_IMAGE=y U-Boot prende il DTB del kernel da
+    resource.img (boot_rkimg.c:497 e :517)."
+
 
 DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 [ -f "$DTB" ] || die "DTB non trovato: $DTB"
@@ -204,7 +244,7 @@ DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 WORK="$BUILD_DIR/lyra-plus-image"
 rm -rf "$WORK"; mkdir -p "$WORK"
 
-msg "resource.img (dtb: ${DTB_NAME}.dtb)"
+msg "resource.img (dtb: ${DTB_NAME}.dtb, resource_tool: $RESOURCE_TOOL_FROM)"
 (
 	cd "$WORK"
 	# resource_tool scrive resource.img nella cwd. I logo sono opzionali:

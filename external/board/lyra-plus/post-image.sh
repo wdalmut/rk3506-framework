@@ -237,7 +237,6 @@ fi
     CONFIG_ROCKCHIP_RESOURCE_IMAGE=y U-Boot prende il DTB del kernel da
     resource.img (boot_rkimg.c:497 e :517)."
 
-
 DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 [ -f "$DTB" ] || die "DTB non trovato: $DTB"
 
@@ -389,11 +388,56 @@ if [ "$INITRAMFS" = 0 ] && [ -x "$HOST_DIR/bin/genimage" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 7. Identita' dell'immagine
+# ---------------------------------------------------------------------------
+# I DTB di questa board NON sono interscambiabili fra kernel vendor 6.1 e
+# kernel mainline: gli ID dei clock nei dt-bindings sono rinumerati (in
+# mainline SCLK_UART0=104 e PCLK_UART0=99). Un boot.img "dell'altro" kernel
+# compila, boota e programma i clock sbagliati: nessun errore, solo una
+# board che non parla.
+#
+# Da qui due contromisure, entrambe a costo zero:
+#
+#   - lyra-manifest.txt: cosa c'e' dentro, in chiaro.
+#   - boot-<kernel release>.img: un HARD LINK a boot.img, cioe' zero byte
+#     in piu'. boot.img resta al suo posto per i comandi di flash, ma sulla
+#     scrivania i due file hanno nomi diversi:
+#         boot-6.1.99.img   percorso vendor
+#         boot-6.19.0.img   percorso mainline
+#     Il nome non e' inventato: viene da include/config/kernel.release,
+#     scritto dal kernel stesso.
+KERNEL_RELEASE="unknown"
+[ -r "$LINUX_DIR/include/config/kernel.release" ] &&
+	KERNEL_RELEASE="$(tr -d '\n' < "$LINUX_DIR/include/config/kernel.release")"
+
+{
+	echo "board=lyra-plus"
+	echo "soc=rk3506g2"
+	echo "kernel_release=$KERNEL_RELEASE"
+	echo "kernel_repo=$(cfg BR2_LINUX_KERNEL_CUSTOM_REPO_URL)"
+	echo "kernel_commit=$(cfg BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
+	echo "kernel_defconfig=$(cfg BR2_LINUX_KERNEL_DEFCONFIG)"
+	echo "dtb=$DTB_NAME.dtb"
+	echo "console=$(cfg BR2_TARGET_GENERIC_GETTY_PORT)"
+	echo "resource_tool=$RESOURCE_TOOL_FROM"
+	echo "uboot_commit=$(cfg BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
+	echo "initramfs=$INITRAMFS"
+} > "$BINARIES_DIR/lyra-manifest.txt"
+
+# Ripulisce i nomi di una build precedente con un kernel diverso, che
+# altrimenti resterebbero in giro a confondere.
+find "$BINARIES_DIR" -maxdepth 1 -name 'boot-*.img' -delete
+ln -f "$BINARIES_DIR/boot.img" "$BINARIES_DIR/boot-$KERNEL_RELEASE.img"
+
+# ---------------------------------------------------------------------------
 msg "artefatti in $BINARIES_DIR"
-for f in MiniLoaderAll.bin uboot.img boot.img rootfs.img update.img flash.img; do
+for f in MiniLoaderAll.bin uboot.img boot.img "boot-$KERNEL_RELEASE.img" \
+         rootfs.img update.img flash.img; do
 	[ -f "$BINARIES_DIR/$f" ] || continue
-	printf '    %-20s %12d B  magic=%s\n' \
+	printf '    %-24s %12d B  magic=%s\n' \
 		"$f" "$(stat -c%s "$BINARIES_DIR/$f")" \
 		"$(hexdump -n 4 -e '4/1 "%02x "' "$BINARIES_DIR/$f")"
 done
+echo
+sed 's/^/    /' "$BINARIES_DIR/lyra-manifest.txt"
 echo

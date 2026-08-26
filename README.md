@@ -336,7 +336,8 @@ Cosa cambia rispetto a `lyra_plus_initramfs_defconfig`:
 | bootargs | dal DTS (`/chosen`) | dal kernel (`CONFIG_CMDLINE_FORCE`) |
 | MTD, adb | presenti | assenti (bring-up da sola console) |
 | rete | presente | **assente** (`CONFIG_NET` spento) |
-| `zImage` | 4.19 MiB | 6.16 MiB |
+| `zImage` | 8.83 MiB | 6.16 MiB |
+| `boot.img` | 10.32 MiB | **6.18 MiB** |
 
 Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
 è sempre UART0 `@0xff0a0000`.

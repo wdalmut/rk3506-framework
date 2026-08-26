@@ -361,9 +361,21 @@ Misurato su questo albero, con la toolchain di Buildroot:
 | + 72 piattaforme estranee spente | 12.11 MiB | ~12.13 MiB | no, per 0.13 MiB |
 | + sottosistemi fuori scope spenti | 6.30 MiB | 6.32 MiB | si |
 | + i 41 `SOC_*` (chiude il buco OMAP) | **6.16 MiB** | **6.18 MiB** | si, 5.8 MiB di margine |
-| *(vendor 6.1, per confronto)* | *4.19 MiB* | *5.48 MiB* | *si* |
 
 L'ultima riga e' la configurazione attuale del fragment.
+
+Il confronto giusto e' con l'altro defconfig **initramfs**, non con quello su
+NAND: e' l'unico che mette il rootfs dentro `boot.img` come fa questo.
+
+| defconfig | `zImage` | `rootfs.cpio` | `boot.img` |
+|---|---|---|---|
+| `lyra_plus_initramfs_defconfig` (vendor 6.1) | 8.83 MiB | 10.48 MiB | **10.32 MiB** |
+| `lyra_plus_mainline_initramfs_defconfig` | 6.16 MiB | 4.67 MiB | **6.18 MiB** |
+
+L'immagine mainline sfoltita e' quindi **piu' piccola** di quella vendor, non
+piu' grande: il kernel e' di poco superiore (circa 4 MiB contro 4.19 MiB senza
+initramfs), ma il rootfs e' meno di meta' perche' non porta ne' i tool MTD ne'
+android-tools/adbd, che in questo bring-up non servono.
 
 Tutte le misure di `zImage` sono **con l'initramfs incorporato**, perche' e'
 quello che finisce in `boot.img`: Buildroot ricompila il kernel dopo aver

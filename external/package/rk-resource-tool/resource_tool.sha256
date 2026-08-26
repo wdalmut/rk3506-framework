@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+#
+# Verifica che src/resource_tool.c sia ancora, byte per byte, il file del
+# kernel vendor da cui e' stato preso. Stessa idea di
+# board/lyra-plus/rkbin.sha256, applicata a un sorgente invece che a un blob.
+#
+#   cd external/package/rk-resource-tool && sha256sum -c resource_tool.sha256
+#
+d565a15c6c95871b762fc3599ef37bdbc4de63f6190f4f889b25ac335266b9e4  src/resource_tool.c

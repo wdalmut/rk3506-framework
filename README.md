@@ -53,6 +53,9 @@ Cosa trovi gia' funzionante:
 - accesso `adb` via USB
 - `hello-lyra`, che al boot dice se la board e' quella giusta e cosa vede
 - una variante `initramfs` per il bring-up senza dipendere dalla NAND
+- una variante con **kernel mainline 6.19** (`ttyS0`), accanto a quella
+  vendor 6.1 e non al suo posto: vedi
+  [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
 
 Cosa cambiare appena forkato:
 
@@ -151,9 +154,12 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     ├── patches/                  BR2_GLOBAL_PATCH_DIR (package Buildroot) — vuota
     ├── configs/
     │   ├── lyra_plus_defconfig            SPI NAND + UBIFS (produzione)
-    │   └── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
+    │   ├── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
+    │   └── lyra_plus_mainline_initramfs_defconfig
+    │                                      come sopra, ma kernel MAINLINE 6.19
     ├── board/lyra-plus/
-    │   ├── linux.config          fragment kernel (non un defconfig completo)
+    │   ├── linux.config          fragment kernel vendor 6.1
+    │   ├── linux-mainline.config fragment kernel mainline 6.19
     │   ├── uboot.config          fragment U-Boot
     │   ├── boot.its              sorgente FIT di boot.img
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
@@ -164,7 +170,10 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     │   ├── post-build.sh         ritocchi al rootfs
     │   ├── post-image.sh         **la catena di packaging Rockchip**
     │   └── rootfs_overlay/       /etc/init.d/{S45adb,S99hello}
-    └── package/hello-lyra/       applicazione Go di verifica
+    └── package/
+        ├── hello-lyra/           applicazione Go di verifica
+        └── rk-resource-tool/     resource_tool di Rockchip, host package
+                                  (sorgente vendorizzato + provenienza)
 ```
 
 Il file da guardare per primo, se una build non torna, e'
@@ -304,6 +313,77 @@ la NAND non viene toccata. Se la board arriva alla shell con questa immagine,
 NAND, UBI e partizionamento sono fuori dall'equazione — e resta da guardare
 solo il resto. E' l'immagine giusta con cui cominciare su hardware nuovo.
 
+### Variante mainline 6.19 (kernel upstream)
+
+```bash
+make lyra_plus_mainline_initramfs_defconfig
+make
+```
+
+Stessa board, stesso U-Boot, stessa catena di packaging, ma kernel **mainline
+6.19.0** invece del vendor 6.1.99. Esiste per rispondere a una domanda sola:
+quanto di questa board si regge su codice upstream? Non sostituisce i due
+defconfig vendor, che restano intatti come termine di paragone.
+
+Cosa cambia rispetto a `lyra_plus_initramfs_defconfig`:
+
+| | vendor | mainline |
+|---|---|---|
+| kernel | 6.1.99, `rk3506-kernel.git` | 6.19.0, `rk3506-kernel-upstream.git` |
+| defconfig kernel | `rk3506_luckfox` | `multi_v7` + `linux-mainline.config` |
+| DTB | `dts/rk3506g-lyra-plus-initramfs.dts` | in-tree `rockchip/rk3506g-luckfox-lyra-plus` |
+| **console** | **`ttyFIQ0`** | **`ttyS0`** |
+| bootargs | dal DTS (`/chosen`) | dal kernel (`CONFIG_CMDLINE_FORCE`) |
+| MTD, adb | presenti | assenti (bring-up da sola console) |
+| rete | presente | **assente** (`CONFIG_NET` spento) |
+| `zImage` | 4.19 MiB | 6.16 MiB |
+
+Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
+è sempre UART0 `@0xff0a0000`.
+
+> #### Perché il fragment spegne mezzo kernel
+>
+> `multi_v7_defconfig` è un defconfig **multi-piattaforma**: accende 76
+> famiglie di SoC ARMv7, e RK3506 è una di quelle. Così com'è produce uno
+> `zImage` di 15.07 MiB e un `boot.img` di 15.09 MiB, che **non entra** nella
+> partizione `boot` da 12 MiB — e la build fallisce nella verifica dimensioni
+> di `post-image.sh`, invece di darti un'immagine non flashabile.
+>
+> `linux-mainline.config` spegne quindi 72 piattaforme estranee e i
+> sottosistemi che nessun nodo del dtsi minimale reclama, arrivando a 6.16 MiB
+> di `zImage` e 6.18 MiB di `boot.img` — 5.8 MiB di margine.
+> Il pruning delle sole piattaforme non bastava: 12.11 MiB, 0.13 MiB sopra il
+> limite.
+>
+> **Conseguenza da sapere prima di usarla: questa immagine non ha rete.**
+> Si lavora dalla seriale. Come riabilitarla, e perché non si è allargata la
+> partizione invece, sono in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+> #### ⚠️ I due `boot.img` non vanno mescolati
+>
+> Gli ID dei clock nei dt-bindings RK3506 sono **rinumerati** fra il 6.1
+> vendor e mainline (`PCLK_UART0` 113 → 99, `SCLK_UART0` 118 → 104, in
+> `include/dt-bindings/clock/rockchip,rk3506-cru.h:112,117` di ciascun
+> repo). Un DTB vendor su kernel mainline, o viceversa, **compila, boota e
+> programma i clock sbagliati**: nessun errore, solo una board muta.
+>
+> Per capire a colpo d'occhio quale immagine si ha in mano:
+>
+> ```bash
+> cat output/images/lyra-manifest.txt      # kernel, commit, DTB, console
+> ls output/images/boot-*.img             # boot-6.1.99.img oppure boot-6.19.0.img
+> ```
+>
+> `boot-<release>.img` è un hard link a `boot.img` — stesso contenuto, zero
+> byte in più, nome inequivocabile. Anche `/etc/issue` sul target lo dice,
+> prima del prompt di login.
+
+Il perché di ogni differenza è in
+[docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *Il percorso
+mainline 6.19, accanto al vendor 6.1* — incluso il motivo per cui
+`resource.img` non si può togliere e `resource_tool` è stato vendorizzato.
+
 ### Iterare su `hello-lyra`
 
 **`make` da solo non ricostruisce `hello-lyra` quando ne cambi il sorgente.**
@@ -393,6 +473,43 @@ rkdeveloptool ld
 `Vid=0x2207` `Pid=0x350f` sono quelli dichiarati dal defconfig U-Boot
 (`CONFIG_USB_GADGET_VENDOR_NUM` / `PRODUCT_NUM`).
 
+### Prima di flashare: quale immagine ho in mano?
+
+Un passo di dieci secondi che evita l'errore piu' costoso di questo albero —
+flashare il `boot.img` mainline su una board che ha il DTB vendor in NAND, o
+viceversa. Non da' errori: da' una board muta (vedi
+[Variante mainline 6.19](#variante-mainline-619-kernel-upstream)).
+
+```bash
+cat output/images/lyra-manifest.txt
+```
+
+```
+board=lyra-plus
+soc=rk3506g2
+kernel_release=6.19.0
+kernel_repo=https://github.com/wdalmut/rk3506-kernel-upstream.git
+kernel_commit=8f714b5131404d31d6964b686d7b6e7740f9dcab
+kernel_defconfig=multi_v7
+dtb=rockchip/rk3506g-luckfox-lyra-plus.dtb
+console=ttyS0
+...
+```
+
+Oppure, senza aprire niente:
+
+```bash
+ls output/images/boot-*.img
+#   boot-6.19.0.img   -> mainline, console ttyS0
+#   boot-6.1.99.img   -> vendor,   console ttyFIQ0
+```
+
+| | vendor | mainline |
+|---|---|---|
+| `boot-*.img` | `boot-6.1.99.img` | `boot-6.19.0.img` |
+| `console=` nel manifest | `ttyFIQ0` | `ttyS0` |
+| `/etc/issue` a boot | `Luckfox Lyra Plus (RK3506G2) - initramfs bring-up` | `... - mainline 6.19 initramfs bring-up` |
+
 ### Immagine unica (consigliato)
 
 ```bash
@@ -401,6 +518,26 @@ sudo rkdeveloptool db MiniLoaderAll.bin      # carica il loader in SRAM
 sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
+
+Le varianti initramfs (vendor e mainline) **non producono `update.img`** se
+`afptool`/`rkImageMaker` non sono disponibili, e non hanno comunque un
+`rootfs.img` da scrivere: il rootfs e' dentro `boot.img`. Per quelle si usa il
+flash per partizione qui sotto, che e' anche il piu' rapido da iterare.
+
+#### Variante initramfs, mainline o vendor
+
+```bash
+cd output/images
+sudo rkdeveloptool db MiniLoaderAll.bin
+sudo rkdeveloptool gpt parameter.txt
+sudo rkdeveloptool wl 0x2000 uboot.img       # @ 4 MiB
+sudo rkdeveloptool wl 0x4000 boot.img        # @ 8 MiB  <- kernel + DTB + rootfs
+sudo rkdeveloptool rd
+```
+
+Poi la seriale a **1500000**: `ttyS0` per il mainline, `ttyFIQ0` per il
+vendor. La partizione `rootfs` non viene toccata, quindi passare da un
+percorso all'altro e' questione dei soli due `wl`.
 
 ### Per partizione
 
@@ -433,8 +570,8 @@ accertato — vedi [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md), sezione *Aperti*.
 
 | | |
 |---|---|
-| Device sul target | `ttyFIQ0` |
-| UART SoC | UART0, base `0xff0a0000` |
+| Device sul target | `ttyFIQ0` (kernel vendor) / `ttyS0` (kernel mainline) |
+| UART SoC | UART0, base `0xff0a0000` — la stessa nei due casi |
 | **Baudrate** | **1500000** |
 | Formato | 8N1, nessun controllo di flusso |
 
@@ -458,6 +595,21 @@ velocita' la fissa il driver, getty non deve toccarla.
 > Su quale pettine della Lyra Plus escano fisicamente quei pin non e'
 > ricavabile dall'SDK: lo script `flash.sh` parla di "UART2", ma il DTS dice
 > `serial-id = <0>`. Il baudrate e la periferica sono invece certi.
+
+Con `lyra_plus_mainline_initramfs_defconfig` il fiq-debugger non c'e':
+`CONFIG_FIQ_DEBUGGER` e' codice vendor, mai mandato upstream. La stessa UART0
+e' guidata dal driver `8250-dw` standard e si chiama **`ttyS0`**. Cambia il
+nome, non il cavo ne' il baudrate. La cmdline e' cablata nel kernel
+(`external/board/lyra-plus/linux-mainline.config`):
+
+```
+earlycon=uart8250,mmio32,0xff0a0000 console=ttyS0,1500000 clk_ignore_unused rootwait
+```
+
+`earlycon` stampa prima che il driver 8250 abbia fatto probe, quindi prima che
+servano clock e pinctrl: se non escono nemmeno quelle righe, il problema e'
+prima del kernel. `CONFIG_CMDLINE_FORCE=y` ignora quello che passa U-Boot, cosi'
+in bring-up la cmdline non e' fra i sospetti.
 
 ---
 

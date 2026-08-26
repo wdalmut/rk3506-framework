@@ -233,3 +233,235 @@ vera. rkbin è 57 MB, quindi `post-image.sh` la rsyncia in
 > Sottigliezza: se una versione precedente aveva lasciato lì un symlink,
 > `mkdir -p` lo attraversa e `rsync` scrive nella sorgente. `post-image.sh`
 > rimuove esplicitamente un eventuale symlink prima di creare la directory.
+
+---
+
+## Il percorso mainline 6.19, accanto al vendor 6.1
+
+`lyra_plus_mainline_initramfs_defconfig` costruisce la stessa board con un
+kernel **mainline 6.19.0** invece del vendor 6.1.99. È un terzo percorso, non
+una sostituzione: i due defconfig vendor restano come termine di paragone.
+Quando il mainline non arriva al prompt, la domanda "è il kernel o è il
+packaging?" si risponde flashando l'altro.
+
+Cosa cambia, e perché:
+
+| | vendor | mainline |
+|---|---|---|
+| kernel | `rk3506-kernel.git` 6.1.99 | `rk3506-kernel-upstream.git` 6.19.0 |
+| defconfig kernel | `rk3506_luckfox` | `multi_v7` + fragment |
+| fragment | `linux.config` | `linux-mainline.config` |
+| DTB | in-tree o custom, senza sottodirectory | `rockchip/rk3506g-luckfox-lyra-plus` |
+| console | `ttyFIQ0` (fiq-debugger) | `ttyS0` (8250-dw) |
+| storage | SPI NAND / UBI, oppure initramfs | solo initramfs |
+| `resource_tool` | dal kernel | host package `rk-resource-tool` |
+| U-Boot | invariato: stesso repo, stesso SHA, stesso fragment | idem |
+
+`ttyFIQ0` non esiste in mainline: è la tty del *FIQ debugger* Rockchip
+(`CONFIG_FIQ_DEBUGGER`), che non è mai stato mandato upstream. La stessa UART0
+`@0xff0a0000` viene quindi guidata dal driver 8250-dw standard e si chiama
+`ttyS0`. Il baudrate resta **1500000**, non 115200.
+
+### I bootargs arrivano dal kernel, non dal DTS
+
+`linux-mainline.config` imposta `CONFIG_CMDLINE` + `CONFIG_CMDLINE_FORCE=y`.
+Il DTS in-tree ha solo `stdout-path` (`rk3506g-luckfox-lyra-plus.dts:14-16`),
+mentre il DTS custom vendor si portava dietro i bootargs in `/chosen`.
+`CMDLINE_FORCE` fa una cosa sola ma utile: toglie U-Boot dall'equazione. Se la
+board resta muta, la cmdline non è tra i sospetti. Ottenuto il prompt si può
+rilassare.
+
+### `resource.img`: perché è obbligatorio
+
+Verrebbe voglia di togliere il nodo `resource` da `boot.its` e chiudere la
+questione senza vendorizzare niente. **Non si può**, e la ragione è nel
+sorgente di U-Boot.
+
+Con `CONFIG_ROCKCHIP_RESOURCE_IMAGE=y` (attivo: si legge in
+`output/build/uboot-*/.config`) il ramo che leggerebbe il DTB dal nodo `fdt`
+del FIT è compilato via:
+
+```c
+/* arch/arm/mach-rockchip/boot_rkimg.c:516-519 */
+} else if (where == LOCATE_FIT) {
+#if defined(CONFIG_ROCKCHIP_FIT_IMAGE) && !defined(CONFIG_ROCKCHIP_RESOURCE_IMAGE)
+        return fit_image_read_dtb(fdt);
+#endif
+```
+
+L'unica via che resta è `LOCATE_RESOURCE` (`boot_rkimg.c:491-497`), cioè
+`rockchip_read_resource_dtb()` → `resource_scan()` → `fit_image_init_resource()`
+(`fit.c:439`), che cerca il nodo `multi` e senza quello ritorna `-EINVAL`
+(`fit.c:453-455`). Il risultato a runtime è `Failed to load DTB, ret=-22`
+seguito da `No valid DTB` (`boot_rkimg.c:499` e `:536`), e il boot si ferma
+lì.
+
+Detto in una riga: **U-Boot prende il DTB del kernel da `resource.img`, non dal
+nodo `fdt` del FIT.** `resource.img` non è un accessorio per i logo di boot.
+
+Togliere il nodo avrebbe quindi richiesto di spegnere
+`CONFIG_ROCKCHIP_RESOURCE_IMAGE` in U-Boot, cioè cambiare il bootloader — e
+il senso di questo defconfig è cambiare **solo** il kernel, per avere un
+confronto pulito. Quindi: `resource_tool` vendorizzato.
+
+### `resource_tool` come host package, non compilato al volo
+
+Nel kernel vendor il tool si costruisce da sé, perché `scripts/Makefile:9` lo
+dichiara `hostprogs-always-$(CONFIG_ARCH_ROCKCHIP)`. In mainline
+`scripts/resource_tool.c` non esiste: non è mai stato mandato upstream.
+
+Il sorgente è vendorizzato in `external/package/rk-resource-tool/src/`, con
+provenienza, sha256 e licenza in
+[../external/package/rk-resource-tool/README.md](../external/package/rk-resource-tool/README.md) —
+la stessa disciplina che `board/lyra-plus/rkbin.sha256` applica ai blob.
+
+È un **host package Buildroot** e non un `cc` dentro `post-image.sh`, per
+quattro motivi concreti:
+
+1. `post-image.sh` gira una volta per build, alla fine. Un `cc` lì dentro
+   ricompila ogni volta e, se fallisce, fallisce *dopo* trenta minuti di
+   toolchain e kernel.
+2. Il compilatore host e i suoi flag li decide Buildroot (`$(HOSTCC)`,
+   `$(HOST_CFLAGS)`), non lo script. Nel container o fuori, sono gli stessi.
+3. La dipendenza diventa **dichiarata**: `BR2_PACKAGE_HOST_RK_RESOURCE_TOOL=y`
+   sta nel defconfig, si vede in `make menuconfig`, e `make legal-info` vede
+   la licenza GPL-2.0+ di Rockchip invece di ignorarla.
+4. `post-image.sh` resta uno script di packaging e non diventa anche un build
+   system.
+
+`post-image.sh` preferisce comunque sempre `$LINUX_DIR/scripts/resource_tool`
+se c'è: il percorso vendor non cambia di una riga, e non c'è modo che i due
+defconfig vendor comincino a usare il binario dell'host package senza che
+nessuno l'abbia chiesto.
+
+### `multi_v7_defconfig` non entra nella partizione `boot`
+
+Il fragment `linux-mainline.config` spegne 72 famiglie di SoC ARM e una
+quindicina di sottosistemi. Non e' zelo: senza, la build **non passa**.
+
+`multi_v7_defconfig` e' un defconfig multi-piattaforma, accende 76 famiglie di
+SoC ARMv7 e RK3506 e' una di quelle. Il risultato:
+
+```
+>>> lyra-plus: verifica dimensioni contro parameter.txt
+    uboot        4.00 MiB /     4.00 MiB  OK
+    boot        15.09 MiB /    12.00 MiB  TROPPO GRANDE
+```
+
+Non e' un problema di rootfs. L'initramfs e' gia' compresso *dentro* il kernel
+(`CONFIG_INITRAMFS_COMPRESSION_GZIP=y`) e `arch/arm/boot/Image` non compresso
+e' **34.90 MiB**: il solo kernel compresso e' circa 13 MiB, quindi non
+entrerebbe nei 12 MiB nemmeno con un rootfs vuoto.
+
+Misurato su questo albero, con la toolchain di Buildroot:
+
+| configurazione | `zImage` | `boot.img` | entra in 12 MiB? |
+|---|---|---|---|
+| `multi_v7` + fragment minimale | 15.07 MiB | 15.09 MiB | no |
+| + 72 piattaforme estranee spente | 12.11 MiB | ~12.13 MiB | no, per 0.13 MiB |
+| + sottosistemi fuori scope spenti | 6.30 MiB | 6.32 MiB | si |
+| + i 41 `SOC_*` (chiude il buco OMAP) | **6.16 MiB** | **6.18 MiB** | si, 5.8 MiB di margine |
+| *(vendor 6.1, per confronto)* | *4.19 MiB* | *5.48 MiB* | *si* |
+
+L'ultima riga e' la configurazione attuale del fragment.
+
+Tutte le misure di `zImage` sono **con l'initramfs incorporato**, perche' e'
+quello che finisce in `boot.img`: Buildroot ricompila il kernel dopo aver
+generato `rootfs.cpio` (`>>>   Rebuilding kernel with initramfs`). Il solo
+kernel, senza initramfs, e' circa 4 MiB — la taglia del vendor. Non
+e' mainline a essere grosso: e' `multi_v7_defconfig` non sfoltito.
+
+Notare la riga di mezzo: il pruning delle sole piattaforme **non basta**,
+manca per 0.13 MiB. E' il motivo per cui il fragment spegne anche
+`CONFIG_NET`, `CONFIG_FTRACE`, `CONFIG_PCI` e compagnia, e non si e' fermato
+alle piattaforme. Quel 12.11 viene da un esperimento incrementale (`sed` sul
+`.config` gia' risolto piu' `olddefconfig`) e non da un merge pulito, quindi
+va letto come ordine di grandezza; il punto che conta e' che non bastava.
+
+### Tre simboli che il fragment non riesce a spegnere
+
+La verifica va fatta sul `.config` **finale**, non sul fragment: `olddefconfig`
+riaccende per `select` quello che qualcuno tira dentro. Su questo albero sono
+tre, tutti spiegati:
+
+| simbolo | chi lo riaccende | si puo' togliere? |
+|---|---|---|
+| `REGULATOR=y` | `arch/arm/mach-rockchip/Kconfig:16` — `ARCH_ROCKCHIP` fa `select REGULATOR` | **no**, e' la piattaforma che vogliamo |
+| `INPUT=y` | `drivers/tty/Kconfig:14-15` — `config VT` fa `select INPUT` | si, spegnendo `CONFIG_VT`; non fatto, costa poco |
+| `ARCH_OMAP=y` | `SOC_AM33XX`/`SOC_AM43XX`/`SOC_DRA7XX`/`SOC_OMAP5` fanno `select ARCH_OMAP2PLUS` (`arch/arm/mach-omap2/Kconfig`) | **si, ed e' stato fatto** |
+
+L'ultimo era un buco vero nella lista: la prima versione intersecava solo i
+simboli `ARCH_*`, e OMAP rientrava dai `SOC_*`, restando compilato dentro
+nonostante `# CONFIG_ARCH_OMAP is not set`. Per questo la ricetta di
+rigenerazione nel fragment copre `(ARCH|SOC)_` e non solo `ARCH_`.
+
+#### Perche' non allargare la partizione, invece
+
+Si poteva: fra la fine di `boot` (20 MiB) e l'inizio di `rootfs` (32 MiB) ci
+sono 12 MiB non allocati, quindi `boot` potrebbe passare da `0x6000` a
+`0xC000` settori senza spostare `rootfs`. Scartata perche' `parameter.txt` e'
+**condiviso** dai tre defconfig ed e' la tabella partizioni che si flasha:
+cambiarlo per far entrare il kernel mainline avrebbe cambiato il layout anche
+delle due immagini vendor, che oggi funzionano. Un percorso nuovo non deve
+ritoccare la baseline del percorso che serve da termine di paragone.
+
+E nel merito: un kernel da 15 MiB per arrivare a stampare su una UART e'
+sproporzionato, e ogni driver in piu' e' un probe in piu' che puo' fallire
+prima che la console sia viva — che e' esattamente cio' che
+`rk3506_minimal.config` dice di voler evitare. Il vincolo di dimensione ha
+solo reso obbligatorio un criterio che era gia' dichiarato.
+
+#### Il prezzo: niente rete
+
+`CONFIG_NET is not set` significa nessuna rete in questa immagine. E' una
+scelta, non un effetto collaterale: l'immagine si usa dalla seriale. Per
+coerenza il defconfig toglie anche `BR2_PACKAGE_IFUPDOWN_SCRIPTS`, che
+altrimenti installerebbe un `S40network` destinato a fallire a ogni boot
+(`/etc/network/interfaces` ha solo `lo`, e senza `CONFIG_NET` nemmeno `lo`
+esiste) sporcando l'unico strumento diagnostico che c'e'.
+
+Per riabilitarla: togliere la riga dal fragment e rimettere il package nel
+defconfig. C'e' margine — 6.18 contro 12.00 MiB — ma la verifica dimensioni di
+`post-image.sh` resta il guardrail, e fallisce la build invece di produrre
+un'immagine non flashabile.
+
+#### La lista delle piattaforme non e' scritta a mano
+
+Viene dai Kconfig del kernel, intersecando i simboli di piattaforma
+(`arch/arm/Kconfig.platforms` e `arch/arm/mach-*/Kconfig`) con quelli che
+`multi_v7_defconfig` accende, meno Rockchip e meno l'infrastruttura
+multi-piattaforma. Il comando per rigenerarla e' nel commento del fragment.
+
+Limite noto: se mainline aggiunge una piattaforma nuova, quella non e' nella
+lista e rientra, facendo ricrescere lo `zImage`. Non c'e' un modo dichiarativo
+di dire "solo Rockchip" partendo da `multi_v7_defconfig`; il controllo che se
+ne accorge e' la verifica dimensioni, che fa fallire la build.
+
+### I DTB dei due kernel non sono interscambiabili
+
+Questa è la trappola grossa, e non dà nessun messaggio di errore.
+
+Gli ID dei clock nei dt-bindings sono stati **rinumerati** fra il 6.1 vendor e
+mainline. Stesso file, stesse righe, valori diversi:
+
+| simbolo | vendor `rockchip,rk3506-cru.h` | mainline `rockchip,rk3506-cru.h` |
+|---|---|---|
+| `PCLK_UART0` (`:112`) | 113 | 99 |
+| `SCLK_UART0` (`:117`) | 118 | 104 |
+
+Un DTB vendor su kernel mainline (o viceversa) **compila, boota e programma i
+clock sbagliati**: gli ID sono numeri, il kernel non ha modo di accorgersi che
+vengono da un'altra numerazione. Nessun errore, solo una board che non parla —
+o che parla a un baudrate che non è quello che ci si aspetta.
+
+Conseguenza operativa: **i `boot.img` dei due percorsi non vanno mai mescolati
+sulla stessa board.** Contromisure, tutte a costo zero:
+
+- `post-image.sh` scrive `output/images/lyra-manifest.txt`: kernel, commit,
+  DTB, console, provenienza di `resource_tool`.
+- accanto a `boot.img` compare un **hard link** con il nome della release del
+  kernel — `boot-6.1.99.img` oppure `boot-6.19.0.img`. Zero byte in più, e
+  sulla scrivania i due file non si somigliano. Il nome viene da
+  `include/config/kernel.release`, scritto dal kernel stesso.
+- `/etc/issue` sul target lo dice prima del prompt di login
+  (`BR2_TARGET_GENERIC_ISSUE`), e `/etc/lyra-release` riporta il commit.

@@ -70,9 +70,37 @@
 };
 
 /*
- * Display: i nodi &dsi / &dsi_dphy / &dsi_in_vop / &route_dsi del DTS vendor
- * NON sono abilitati qui, in coerenza con board/lyra-plus/linux.config che
- * non applica rk3506-display.config. Anche &cma resta al default del dtsi
- * (il vendor lo alzava a 32 MiB per il VOP): su un initramfs quella memoria
- * serve piu' al rootfs in RAM che a un framebuffer che non usiamo.
+ * Display e CMA: NON sono disattivati in questa variante. Misurato sulla
+ * board, non dedotto:
+ *
+ *     rockchip-drm display-subsystem: bound ff600000.vop
+ *     rockchip-drm display-subsystem: bound ff640000.dsi
+ *     [drm] fb0: rockchipdrmfb frame buffer device
+ *     CmaTotal:  32768 kB      MemTotal:  89216 kB
+ *
+ * Ad abilitarli e' rk3506-luckfox-lyra.dtsi, cioe' il dtsi incluso qui sopra:
+ * mette status = "okay" su &display_subsystem, &route_dsi, &vop, &dsi,
+ * &dsi_dphy e &dsi_in_vop, e porta &cma a size = <0x2000000> (32 MiB). Il
+ * default a 0x0 sta in rk3506.dtsi ed e' proprio quello che quel dtsi
+ * sovrascrive; nel kernel CONFIG_CMA_SIZE_MBYTES=0, quindi la riserva arriva
+ * tutta dal DT. Includere il dtsi senza override lascia tutto acceso.
+ *
+ * Nemmeno il kernel li esclude: dei simboli =y di rk3506-display.config — il
+ * fragment che board/lyra-plus/linux.config non applica — mancano solo quattro
+ * driver touchscreen; tutto il resto dello stack DRM/VOP/DSI e' gia' nel
+ * defconfig vendor rk3506_luckfox_defconfig.
+ *
+ * Spegnerli davvero richiederebbe override espliciti qui:
+ *
+ *     &cma { size = <0x0>; };
+ *     &display_subsystem { status = "disabled"; };
+ *     // idem &vop, &dsi, &dsi_dphy, &dsi_in_vop, &route_dsi
+ *
+ * Varrebbe 32 MiB su 128 proprio nella variante dove il rootfs vive in RAM.
+ * Non si fa qui: il perche' e' in docs/BOARD-FACTS.md, sezione "I 32 MiB di
+ * CMA, e perche' restano".
+ *
+ * Con il pannello DSI scollegato lo stack sale lo stesso e lascia a log
+ * "failed to find panel or bridge: -517", "Expected bpc in {6,8} but got: 0"
+ * e "ws_backlight 2-0045: failed ret: -6". Sono attesi, non regressioni.
  */

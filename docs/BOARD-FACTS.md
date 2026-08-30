@@ -267,8 +267,8 @@ Il DTS di board fa:
 ```
 
 mentre il default nel dtsi è `size = <0x0>`. Quindi il DTS vendor riserva
-**32 MiB di CMA per il VOP** — e questo albero il display non lo costruisce
-(`linux.config` non applica `rk3506-display.config`).
+**32 MiB di CMA per il VOP**. E il VOP questo albero lo costruisce eccome:
+vedi [Il display è acceso, anche senza il fragment](#il-display-e-acceso-anche-senza-il-fragment).
 
 La misura successiva ha dato `CmaTotal = 32 MiB` e `CmaFree = 0`: il sospetto
 regge. Non e' un difetto e non va corretto qui — vedi la sezione dedicata.
@@ -294,15 +294,18 @@ CmaFree:        0.0 MiB (0 kB)
 };
 ```
 
-mentre il default nel dtsi è `size = <0x0>`. Quel CMA esiste per il VOP, e
-questo albero il display non lo costruisce: `board/lyra-plus/linux.config` non
-applica `rk3506-display.config`.
+mentre il default nel dtsi è `size = <0x0>`. Quel CMA esiste per il VOP — e il
+VOP su questa base è attivo, vedi la sezione qui sotto.
 
-`CmaFree = 0` è la parte che conta. Se quei 32 MiB fossero regolarmente entrati
-nel buddy allocator come `MIGRATE_CMA`, sarebbero quasi tutti liberi e
+`CmaFree = 0` è la parte che resta aperta. Se quei 32 MiB fossero regolarmente
+entrati nel buddy allocator come `MIGRATE_CMA`, sarebbero quasi tutti liberi e
 utilizzabili come memoria normale, e il CMA sarebbe innocuo. Con `CmaFree = 0`
-non lo sono: nessuno li sta usando (non c'è display) ma non sono nemmeno
-disponibili.
+non lo sono. Il framebuffer `fb0` che il VOP alloca ne spiega una parte, ma non
+32 MiB: la console è `100x80` caratteri e il `drm_logo` sono 1384 kB, restituiti
+a boot concluso (`Freeing drm_logo memory: 1384K`). **Chi tenga occupato il
+resto non è stato misurato**; servirebbe `/sys/kernel/debug/cma/`. Fino ad
+allora l'ipotesi "riservati e mai restituiti al sistema" spiega i conti di
+`MemTotal` ma non è verificata nel dettaglio.
 
 I conti tornano con l'ipotesi "riservati e mai restituiti al sistema":
 
@@ -341,6 +344,64 @@ quello che **resta** dopo CMA e regioni riservate. Non rispondono alla domanda
 "quanta DDR c'e' sul chip": sono il punto di partenza del conto, non la sua
 verifica.
 
+### Il display e' acceso, anche senza il fragment
+
+Per un po' questo documento, `board/lyra-plus/linux.config` e il DTS della
+variante initramfs hanno affermato la stessa cosa: che *questo albero il
+display non lo costruisce*, perche' `linux.config` non applica il fragment
+in-tree `rk3506-display.config`. **E' falso**, e la board lo dimostra:
+
+```
+rockchip-drm display-subsystem: bound ff600000.vop (ops 0xb068e990)
+rockchip-drm display-subsystem: bound ff640000.dsi (ops 0xb068fb64)
+[drm] Initialized rockchip 4.0.0 20140818 for display-subsystem on minor 0
+Console: switching to colour frame buffer device 100x80
+rockchip-drm display-subsystem: [drm] fb0: rockchipdrmfb frame buffer device
+Freeing drm_logo memory: 1384K
+```
+
+Le ragioni sono due, indipendenti, e nessuna delle due passa dal fragment.
+
+**Lato kernel**, lo stack DRM e' gia' nel defconfig vendor. Confrontando ogni
+simbolo `=y` di `arch/arm/configs/rk3506-display.config` con il `.config`
+prodotto, gli unici assenti sono quattro driver touchscreen:
+
+| simbolo | stato |
+|---|---|
+| `CONFIG_DRM`, `CONFIG_DRM_ROCKCHIP`, `CONFIG_ROCKCHIP_VOP` | gia' attivi |
+| `CONFIG_ROCKCHIP_DW_MIPI_DSI`, `CONFIG_DRM_MIPI_DSI`, `CONFIG_DRM_PANEL_SIMPLE` | gia' attivi |
+| `CONFIG_BACKLIGHT_PWM`, `CONFIG_DRM_KMS_HELPER`, `CONFIG_VIDEOBUF2_CMA_SG` | gia' attivi |
+| `CONFIG_TOUCHSCREEN_EDT_FT5X06`, `_GOODIX`, `_GSLX680_PAD`, `_GT1X` | **mancanti** |
+
+Non applicare `rk3506-display.config` toglie i touchscreen, non il display.
+
+**Lato device tree**, i nodi li abilita `rk3506-luckfox-lyra.dtsi` — il dtsi di
+board, incluso da entrambe le varianti — non il DTS vendor:
+
+```
+&cma { size = <0x2000000>; };          /* riga 150 */
+&display_subsystem { status = "okay"; };
+&route_dsi { status = "okay"; };
+&vop { status = "okay"; };
+&dsi { status = "okay"; };
+&dsi_dphy { status = "okay"; };        /* riga 1075 */
+&dsi_in_vop { status = "okay"; };
+```
+
+Anche la variante initramfs include quel dtsi e non sovrascrive nulla, quindi
+eredita display **e** i 32 MiB di CMA. Nel kernel `CONFIG_CMA_SIZE_MBYTES=0`:
+la riserva arriva tutta dal DT.
+
+Conseguenze pratiche da conoscere:
+
+- `console=tty1` nel bootargs del DTS di board **un framebuffer lo trova**.
+  `/dev/console` finisce comunque su `ttyFIQ0`, ma perche' e' l'ultima
+  `console=` dichiarata, non perche' `tty1` fallisca.
+- con il pannello DSI scollegato lo stack sale lo stesso e lascia a log
+  `failed to find panel or bridge: -517`, `Expected bpc in {6,8} but got: 0` e
+  `ws_backlight 2-0045: failed ret: -6`. Sono attesi, non regressioni.
+- i 32 MiB di CMA valgono per **entrambe** le varianti, initramfs compresa.
+
 ### Decisione: si tengono
 
 Azzerare `&cma` restituirebbe **32 MiB su 128, cioè il 37% di RAM utilizzabile
@@ -348,11 +409,10 @@ in più**, con un DTS custom via `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH` — lo stess
 meccanismo della variante initramfs.
 
 Non si fa in questa base, ed è una scelta, non una dimenticanza. Il CMA è la
-metà che costa cambiare: accendere un pannello per un esperimento significa
-aggiungere il fragment display e basta, mentre con il CMA azzerato qui
-servirebbe anche un DTS di board solo per rimetterlo. E il sintomo di
-essersene dimenticati — un VOP che non alloca framebuffer — è fra i più
-oscuri da diagnosticare.
+metà che costa cambiare: come si è visto sopra il display è gia' su e il
+pannello si attacca e basta, mentre con il CMA azzerato qui servirebbe un DTS
+custom solo per rimetterlo. E il sintomo di essersene dimenticati — un VOP che
+non alloca framebuffer — è fra i più oscuri da diagnosticare.
 
 Il verso giusto è l'opposto: **si tolgono in fase di target**, quando si sa
 che quel prodotto il display non ce l'ha.

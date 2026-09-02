@@ -352,7 +352,23 @@ Serve rimuovere lo stamp, e conviene farlo sul package piu' piccolo:
 mv buildroot/dl/uboot/uboot-<sha>-git4.tar.gz /tmp/          # da parte, non cancellato
 rm -f output/build/uboot-*/.stamp_downloaded
 make MIRROR=https://<host>/dl uboot-source
+make uboot-dirclean                                          # OBBLIGATORIO, vedi sotto
 ```
+
+> **Il `uboot-dirclean` non e' opzionale.** Togliere lo `.stamp_downloaded`
+> lascia la directory di build in uno stato incoerente: i sorgenti sono ancora
+> quelli estratti e **gia' patchati** dal giro precedente, ma per Buildroot il
+> download non e' mai avvenuto, quindi al `make` successivo ri-estrae e
+> ri-applica le patch sopra un albero che le ha gia'. Il sintomo non e' un
+> errore di patch, e' questo:
+>
+> ```
+> Error: duplicate filename '0001-common-edid-initialize-hdmi_len-to-silence-gcc-13.patch'
+> ```
+>
+> cioe' `apply-patches.sh` che trova due volte lo stesso nome nella lista.
+> Sembra un problema delle patch e non lo e'. Il `-dirclean` riporta il
+> package allo stato "da estrarre" e il giro dopo e' pulito.
 
 Nel log deve comparire il `wget` sull'URL del mirror e nessun tentativo git:
 

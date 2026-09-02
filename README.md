@@ -342,6 +342,31 @@ Serve una output dir separata: la `.config` in `output/` contiene i path del
 **container** (`/work/external/...`), e dall'host Buildroot si ferma con
 *"BR2_GLOBAL_PATCH_DIR contains nonexistent directory"*.
 
+**Verificare che un mirror funzioni davvero.** Non basta lanciare `make` con
+`MIRROR=`: se i tarball sono gia' in `dl/` non viene scaricato niente e la
+build passa senza toccare il mirror. Anche `make <pkg>-source` da solo non
+basta, perche' Buildroot vede lo `.stamp_downloaded` e salta in silenzio.
+Serve rimuovere lo stamp, e conviene farlo sul package piu' piccolo:
+
+```sh
+mv buildroot/dl/uboot/uboot-<sha>-git4.tar.gz /tmp/          # da parte, non cancellato
+rm -f output/build/uboot-*/.stamp_downloaded
+make MIRROR=https://<host>/dl uboot-source
+```
+
+Nel log deve comparire il `wget` sull'URL del mirror e nessun tentativo git:
+
+```
+>>> uboot <sha> Downloading
+wget ... 'https://<host>/dl/uboot/uboot-<sha>-git4.tar.gz'
+HTTP request sent, awaiting response... 200 OK
+```
+
+Poi confronta lo sha256 con la copia messa da parte: i `-git4.tar.gz` sono
+generati da Buildroot con un `tar` riproducibile, quindi devono essere
+identici byte per byte. Se differiscono, il mirror serve una variante e i
+checksum non torneranno.
+
 > **Limite noto.** Senza mirror e senza uno dei due rimedi, un clone fresco
 > **non** completa la build: i package di terzi scaricano, kernel e U-Boot no.
 > Il perche' della diagnosi, con i test che la inchiodano, e' in

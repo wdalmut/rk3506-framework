@@ -575,9 +575,24 @@ SHA.
 `BR2_PRIMARY_SITE_ONLY` resta la strada per build ermetiche — niente
 dipendenza da GitHub, kernel.org, gnu.org, che cadono tutti prima o poi. Con
 gli SHA pinnati come li abbiamo e' cio' che rende una release ricostruibile
-fra due anni. Ha senso solo con un mirror **completo**, perche' un tarball
-mancante diventa errore secco senza fallback: da valutare quando il mirror
-c'e' e regge.
+fra due anni.
+
+Ma non e' un interruttore da lasciare acceso, ed e' il motivo per cui non e'
+attivo. Con `ONLY` un tarball mancante e' errore secco, senza fallback — e
+un tarball manca **ogni volta che si alza qualcosa**: un nuovo SHA del
+kernel, una release di Buildroot che sposta le versioni dei package. Il
+flusso diventerebbe: scarica normalmente, sincronizza sul mirror, poi
+ricostruisci con `ONLY`. Tre passi dove oggi ce n'e' uno.
+
+Ha senso quindi come **modalita' per riprodurre una release**, non come
+impostazione di tutti i giorni: si accende su uno snapshot congelato e
+completo, per dimostrare che quella release si ricostruisce da sola. Lo
+sviluppo quotidiano resta con il fallback, che e' proprio la rete di
+sicurezza che `ONLY` toglie.
+
+Nota sulle dimensioni, utile per decidere: l'insieme completo dei tarball di
+questo build e' **42 file per ~1.1 GB**, di cui 720 MB sono i tre tarball del
+kernel. Non e' un mirror grande.
 
 ### Quanto divergiamo da mainline, e cosa costa il salto a 7.0
 

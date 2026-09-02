@@ -256,6 +256,97 @@ l'oggetto tree del commit vendor, quindi il contenuto e' identico bit per bit;
 lo SHA differisce perche' differiscono i parent. Si rigenerano con
 [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh).
 
+Il percorso mainline usa un terzo repository, `rk3506-kernel-upstream.git`, con
+il DTS di board e le sue correzioni; lo SHA e' nel defconfig.
+
+### `MIRROR=` — quando GitHub non serve i fetch git anonimi
+
+**Sintomo.** La build si ferma sul kernel o su U-Boot con un messaggio che
+manda fuori strada:
+
+```
+>>> linux-headers <sha> Downloading
+fatal: could not read Username for 'https://github.com': No such device or address
+fatal: the remote end hung up unexpectedly
+Detected a corrupted git cache.
+```
+
+Sembra un repository privato o una chiave SSH mancante. **Non lo e'.** GitHub
+risponde `401` a `POST /git-upload-pack` quando il client non e' autenticato, e
+git riporta quel 401 come una richiesta di credenziali. Il container non ne ha,
+per scelta: monta solo `/work`, quindi niente `~/.ssh`, niente `~/.gitconfig`,
+niente credential helper. Che l'host sia autenticato non conta — la build non
+gira sull'host.
+
+Riguarda **solo** kernel e U-Boot, che sono `BR2_*_CUSTOM_GIT`. Gli altri ~80
+package scaricano tarball via HTTPS normale e funzionano.
+
+**Rimedio: un mirror dei tarball.**
+
+```sh
+make MIRROR=https://<host>/dl lyra_plus_mainline_initramfs_defconfig
+make MIRROR=https://<host>/dl
+```
+
+Diventa `BR2_PRIMARY_SITE`: provato **prima** del sito upstream di ogni
+package, con fallback su quest'ultimo. Servendo file su HTTPS evita del tutto
+il protocollo git. Il layout atteso e' quello di `dl/` di Buildroot:
+
+```
+https://<host>/dl/linux/linux-<sha>-git4.tar.gz
+https://<host>/dl/uboot/uboot-<sha>-git4.tar.gz
+```
+
+Per non ripeterlo a ogni comando, l'URL puo' stare in `local.mk`, che e' in
+`.gitignore`:
+
+```sh
+echo 'MIRROR = https://<host>/dl' > local.mk
+```
+
+**In questo albero non c'e' nessun URL di mirror**, e non e' una dimenticanza:
+un mirror e' infrastruttura di chi lo paga, e questo repository e' pubblico.
+Chi ne ha uno lo indica con `MIRROR=`; chi non ne ha non paga il traffico di
+nessun altro.
+
+**Pubblicare un mirror**, se ne volete uno: bastano `dl/` servita su HTTPS —
+un bucket S3, un CloudFront, un nginx. Le cache di lavoro git **non** vanno
+caricate (sono checkout, non tarball, e Buildroot le ricrea: 2.4 GB dei 3.5
+totali):
+
+```sh
+cd buildroot/dl
+aws s3 cp . s3://<bucket>/dl/ --recursive \
+    --exclude "*/git/*" --exclude "*/git" \
+    --exclude "*.lock" --exclude "*/git.readme" \
+    --exclude "br-cargo-home/*"
+```
+
+Se il bucket e' public-read, l'URL e' un segreto solo per oscurita': chi lo
+scopre scarica a spese vostre. Una condizione `aws:SourceIp` nella bucket
+policy limita l'accesso alle vostre reti senza rimettere credenziali nel
+container.
+
+**Rimedio alternativo, senza mirror**: scaricare i due tarball **dall'host**,
+dove git e' autenticato, nella cache condivisa. Serve una volta per SHA.
+
+```sh
+make -C buildroot O="$PWD/out-dl" BR2_EXTERNAL="$PWD/external" \
+     lyra_plus_mainline_initramfs_defconfig
+make -C buildroot O="$PWD/out-dl" BR2_EXTERNAL="$PWD/external" \
+     linux-source uboot-source
+rm -rf out-dl
+```
+
+Serve una output dir separata: la `.config` in `output/` contiene i path del
+**container** (`/work/external/...`), e dall'host Buildroot si ferma con
+*"BR2_GLOBAL_PATCH_DIR contains nonexistent directory"*.
+
+> **Limite noto.** Senza mirror e senza uno dei due rimedi, un clone fresco
+> **non** completa la build: i package di terzi scaricano, kernel e U-Boot no.
+> Il perche' della diagnosi, con i test che la inchiodano, e' in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
 ---
 
 ## Build

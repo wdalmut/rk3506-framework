@@ -474,6 +474,111 @@ spegnere le piattaforme non basta ad avere un kernel minimale: il pruning per
 sottosistema della sezione `(3/5)` serve, e non e' completo per costruzione —
 si allunga a ogni boot che rivela qualcosa.
 
+### Il container non ha credenziali, e GitHub ha smesso di servire i fetch anonimi
+
+Il `Makefile` monta nel container solo `/work`, con `HOME=/tmp`. Niente
+`~/.ssh`, niente `~/.gitconfig`, niente credential helper, verificato:
+
+```
+HOME=/tmp
+~/.ssh:            assente
+~/.gitconfig:      assente
+~/.netrc:          assente
+credential.helper: nessuno
+```
+
+E' voluto, ed e' la ragione per cui i due `_CUSTOM_GIT` usano `https` e non
+`ssh`. Quella scelta contiene pero' un presupposto che non era scritto da
+nessuna parte: **che l'accesso git anonimo funzioni.** Il 26 agosto
+funzionava; il 2 settembre no.
+
+#### La diagnosi, perche' il messaggio d'errore mente
+
+```
+fatal: could not read Username for 'https://github.com': No such device or address
+fatal: the remote end hung up unexpectedly
+Detected a corrupted git cache.
+```
+
+Sembrano tre cose: un repository privato, una chiave mancante, una cache
+rotta. Non e' nessuna delle tre. Con `GIT_CURL_VERBOSE=1`:
+
+```
+GET  /<repo>.git/info/refs?service=git-upload-pack   HTTP/2 200
+POST /<repo>.git/git-upload-pack                     HTTP/2 401
+```
+
+L'annuncio dei ref passa anonimo, la negoziazione no. Git riporta il 401 come
+richiesta di credenziali, e la "cache corrotta" e' solo Buildroot che ritenta
+due volte e si arrende.
+
+Tre test per inchiodarla, perche' le prime due ipotesi erano sbagliate:
+
+| test | esito | cosa esclude |
+|---|---|---|
+| `buildroot/buildroot.git` dal container | **401 uguale** | non e' il nostro repository, ne' la sua visibilita' |
+| nostro repo, `protocol.version=0` | `ls-remote` **passa**, il fetch **no** | non e' il protocollo v2: il POST c'e' in entrambe le versioni |
+| stesso comando dall'host | **funziona** | e' l'accesso anonimo |
+
+L'host ce la fa perche' ha un helper *scoped per URL* in `~/.gitconfig`:
+
+```
+credential.https://github.com.helper = !/usr/bin/gh auth git-credential
+```
+
+che un `git config --get credential.helper` non mostra — dettaglio che ha
+allungato la diagnosi.
+
+Attenzione all'effetto ottico: una build che trova i tarball gia' in `dl/`
+non se ne accorge. Il guasto si manifesta **solo alzando uno SHA**, ed e'
+esattamente cosi' che l'abbiamo trovato.
+
+#### Perche' `MIRROR=` e non un URL nel defconfig
+
+Un mirror che serve file su HTTPS evita del tutto il protocollo git, quindi
+risolve. Ma l'URL **non** sta in questo albero, per due motivi indipendenti:
+
+- un mirror e' infrastruttura di chi la paga, e questo repository e'
+  pubblico: un URL cablato significa che il traffico di sconosciuti finisce
+  sulla bolletta di qualcun altro;
+- un valore site-specific per variante e' il problema che i defconfig
+  dovrebbero evitare. `BR2_PRIMARY_SITE` e' una stringa sola.
+
+Quindi: `MIRROR=` da riga di comando, oppure in `local.mk` che e' in
+`.gitignore`. Default vuoto, comportamento invariato.
+
+Due dettagli implementativi non ovvi, entrambi a commento nel `Makefile`:
+
+`MIRROR` va passato sulla **riga di comando** di make, non nell'ambiente. Il
+`.config` di Buildroot assegna `BR2_PRIMARY_SITE` come variabile del makefile,
+e l'ambiente non sovrascrive un'assegnazione del makefile — la riga di comando
+si'. Con `-e` non avrebbe funzionato.
+
+E `-include local.mk` da solo non basta: make prova a *ricostruire* un file
+incluso che manca, la regola catch-all `%:` intercetta il nome e lo inoltra a
+Buildroot, che risponde `No rule to make target`. Serve la regola vuota
+`$(LOCAL_MK): ;`, lo stesso idioma che il `Makefile` usava gia' per se stesso.
+
+#### Il limite che questa scelta accetta
+
+| senza `MIRROR` | |
+|---|---|
+| ~80 package di terzi | scaricano da upstream, funzionano |
+| kernel e U-Boot | **falliscono** |
+
+Un clone fresco, per chi non ha un mirror ne' credenziali git, non completa
+la build. E' un limite noto e accettato: l'alternativa era pubblicare un
+mirror a spese di qualcuno, o rimettere segreti nel container. Il rimedio
+documentato e' scaricare i due tarball dall'host, che serve una volta per
+SHA.
+
+`BR2_PRIMARY_SITE_ONLY` resta la strada per build ermetiche — niente
+dipendenza da GitHub, kernel.org, gnu.org, che cadono tutti prima o poi. Con
+gli SHA pinnati come li abbiamo e' cio' che rende una release ricostruibile
+fra due anni. Ha senso solo con un mirror **completo**, perche' un tarball
+mancante diventa errore secco senza fallback: da valutare quando il mirror
+c'e' e regge.
+
 ### Quanto divergiamo da mainline, e cosa costa il salto a 7.0
 
 Il senso del percorso mainline e' capire quanto di questa board si regge su

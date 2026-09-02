@@ -464,7 +464,16 @@ Memory: 48024K/129024K available (... 65536K cma-reserved ...)
 ```
 
 48 MB utilizzabili su 128. CMA lo vogliono DRM, V4L2 e MMC, che sono tutti
-spenti: e' RAM riservata per nessun utente. Spento.
+spenti: e' RAM riservata per nessun utente. Spento, e misurato sulla board:
+
+```
+# free -m
+              total        used        free      shared  buff/cache   available
+Mem:            116           9         100           5           7          99
+```
+
+Da ~47 MB utilizzabili a 116 di totale: **69 MB recuperati**, i 64 MiB di CMA
+piu' il kernel piu' piccolo.
 
 **Nove driver ancora vivi dopo il pruning delle piattaforme**, perche' non
 sono gated su un simbolo `ARCH_*` e restano da `multi_v7_defconfig`: PL011,

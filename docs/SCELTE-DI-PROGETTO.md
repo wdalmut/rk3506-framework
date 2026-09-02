@@ -610,16 +610,45 @@ codice upstream, e potersi spostare dalla 6.19 alla 7.0 toccando poco. Questo
 richiede una regola su *dove* possono stare le modifiche, non solo quante
 sono.
 
-**La regola: zero patch al codice del kernel.** Oggi e' rispettata.
+**La regola: zero patch al codice del kernel.** Oggi e' rispettata, ma va
+letta guardando il branch del kernel per intero, non solo la parte nostra.
+
+Il branch `rk3506-lyra-plus` di `rk3506-kernel-upstream.git` ha **17 commit
+sopra il tag `v6.19`**, e sono di due provenienze diverse:
+
+| provenienza | commit | cosa tocca |
+|---|---|---|
+| **Ye Zhang \<ye.zhang@rock-chips.com\>**, 2025-12-27 | 7 | tutto il codice C: `pinctrl-rockchip.c` (+282), `pinctrl-rockchip.h` (+20), `gpio-rockchip.c` (+2), i binding, i dtsi pinctrl/rmio generati (rk3506 e rv1126b) |
+| **nostri** | 9 | solo DTS/DTSI e `arch/arm/configs/rk3506_minimal.config` |
+
+I sette di Rockchip sono una serie **in volo verso upstream**, cherry-pickata
+qui: uno di essi (`gpio: rockchip: support new version GPIO`) porta gia'
+`Acked-by: Bartosz Golaszewski`, il maintainer di gpio. Questo cambia il
+segno del ragionamento sul salto di versione: quel codice non e' debito
+nostro da riportare, e' base che *arrivera'*. Quando la serie atterra, quei
+sette commit spariscono dal branch per assorbimento.
+
+Verifica dei numeri (i due file DTS non sono in `v6.19`, li introduce il
+branch):
+
+```sh
+cd ~/git/rk3506-kernel-upstream
+git log --format='%h %an %s' v6.19..HEAD
+git diff --numstat v6.19..HEAD
+git cat-file -e v6.19:arch/arm/boot/dts/rockchip/rk3506.dtsi   # fallisce
+```
+
+Restano quindi i nove nostri, e la tabella che conta e' questa:
 
 | cosa | e' divergenza? | stato |
 |---|---|---|
-| patch al **codice** del kernel (`.c`, `.S`, Kconfig) | si, la peggiore | **nessuna** |
-| patch portate dal framework a un sorgente di terzi | si | **nessuna** |
-| proprieta' nel DTS **della nostra board** | **no** | due, nel repo kernel |
-| fragment di config (`linux-mainline.config`) | no | uno |
+| patch al **codice** del kernel (`.c`, `.S`, Kconfig) scritte da noi | si, la peggiore | **nessuna** |
+| patch portate dal framework a un sorgente di terzi | si | **nessuna al kernel** (quattro a U-Boot, solo warning gcc-13) |
+| DTSI del **SoC** (`rk3506.dtsi`) | **no**, il file e' nostro e non e' upstream | due proprieta' |
+| DTS **della nostra board** | **no**, idem | due proprieta' |
+| fragment di config (`linux-mainline.config`, `linux-mainline-flash.config`) | no | due |
 
-La distinzione che conta e' la terza. `rk3506g-luckfox-lyra-plus.dts` **non e'
+La distinzione che conta e' la terza e la quarta. `rk3506g-luckfox-lyra-plus.dts` **non e'
 ancora in mainline**: e' il nostro contributo in corso, nel branch
 `rk3506-lyra-plus`. Aggiungerci una proprieta' corretta non e' forkare Linux,
 e' scrivere il supporto della board. Quando la board andra' upstream, la
@@ -841,3 +870,158 @@ sulla stessa board.** Contromisure, tutte a costo zero:
   `include/config/kernel.release`, scritto dal kernel stesso.
 - `/etc/issue` sul target lo dice prima del prompt di login
   (`BR2_TARGET_GENERIC_ISSUE`), e `/etc/lyra-release` riporta il commit.
+
+### La SPI NAND su mainline, e l'`mtd-id` che nessuno fa combaciare
+
+Il rootfs su flash e' il quarto defconfig, `lyra_plus_mainline_defconfig`.
+Due cose sono andate meglio del previsto e una era una trappola.
+
+**Andata bene: il driver mainline guida l'FSPI senza una riga di modifica.**
+Il vendor tratta l'FSPI del RK3506 come un IP a se; mainline ha un solo
+driver, `spi-rockchip-sfc.c`, con un solo compatible generico
+`"rockchip,sfc"` (`drivers/spi/spi-rockchip-sfc.c:822-825`). Non c'e' nessuna
+tabella per SoC da estendere, perche' il driver legge la versione dell'IP dal
+registro `SFC_VER` (offset `0x2C`) **a runtime**, alla riga 691, e non rifiuta
+mai una versione che non conosce: la usa solo per adattare il comportamento
+(`>= SFC_VER_4`, `>= SFC_VER_8`). Quindi tutto il lavoro e' il device tree: il
+nodo `sfc@ff488000` in `rk3506.dtsi` e il figlio `flash@0` con i pinctrl
+`fspi_*` nel DTS della board.
+
+Confermato su hardware:
+
+```
+spi-nand spi0.0: Winbond SPI NAND was found.
+spi-nand spi0.0: 256 MiB, block size: 128 KiB, page size: 2048, OOB size: 128
+```
+
+Da sapere per non perdere tempo: **il driver non stampa nulla quando il probe
+riesce.** In `spi-rockchip-sfc.c` non c'e' un solo `dev_info`, solo `dev_err`
+e `dev_dbg`. L'assenza di una riga `rockchip-sfc ff488000.spi:` nel `dmesg`
+non e' un fallimento; la prova che ha funzionato e' che esiste `spi0.0`.
+
+**La trappola: le partizioni MTD non possono arrivare da U-Boot.** Non e' una
+conseguenza di `CONFIG_CMDLINE_FORCE=y` — nemmeno rilassandolo funzionerebbe.
+
+U-Boot fa la sua parte bene. Genera a runtime un `mtdparts` in byte, non nei
+settori di `parameter.txt`: `drivers/mtd/mtd_blk.c:410-426`, dove il `<< 9`
+e' la conversione. Il prefisso `mtd-id` lo prende da `desc->product`, che per
+una spi-nand e' `mtd->name` (`mtd_blk.c:716-719`), e in U-Boot vale
+`spi-nand0` (`drivers/mtd/nand/spi/core.c:1325`). Passa quindi
+`mtdparts=spi-nand0:...`.
+
+Linux accetta la definizione solo se l'`mtd-id` combacia **esattamente** con
+`mtd->name`:
+
+```c
+if ((!mtd_id) || (!strcmp(part->mtd_id, mtd_id)))
+```
+
+`drivers/mtd/parsers/cmdlinepart.c:346`, con `mtd_id = master->name` alla riga
+332. E qui le due catene si separano:
+
+| | `mtd->name` di una spi-nand | perche' |
+|---|---|---|
+| kernel **vendor** 6.1 | `spi-nand0` | patch locale Rockchip: `mtd->name = "spi-nand0"` dentro `if (IS_ENABLED(CONFIG_SPI_ROCKCHIP_SFC))`, `drivers/mtd/nand/spi/core.c:1408-1409` |
+| kernel **mainline** 6.19 | `spi0.0` | quella patch non c'e': spinand registra con `name` NULL (`core.c:1672,1678`) e mtdcore ripiega su `dev_name(parent)`, cioe' il nome del device SPI (`mtdcore.c:896-897`) |
+
+Quindi la stringa di U-Boot non combacia mai su mainline. E non combacia
+nemmeno il `CMDLINE:` di `board/lyra-plus/parameter.txt`, per due motivi
+insieme: ha l'`mtd-id` **vuoto** (`mtdparts=:...`), che non e' un jolly —
+`cmdlinepart.c:346` accetta il vuoto solo se `master->name` e' NULL, e non lo
+e' mai — e ha le size in settori. Quella riga e' il formato di Rockchip per il
+tool di flash, non una cmdline Linux.
+
+**La scelta.** Replicare la patch al `mtd->name` sarebbe esattamente la
+divergenza del vendor, e upstream non ha motivo di accettarla: il nome
+`spi0.0` e' quello giusto per mainline, e' `spi-nand0` a essere l'anomalia.
+L'alternativa mainline-idiomatica — un nodo `partitions { compatible =
+"fixed-partitions"; }` nel DTS — sposterebbe il layout dentro il repo del
+kernel, dove upstream non lo vuole e dove andrebbe riallineato a mano ogni
+volta che cambia `parameter.txt`.
+
+Il layout resta quindi dichiarato **nel framework**, nella nostra cmdline, con
+l'`mtd-id` di mainline e in byte, convertito da `parameter.txt:12` con la
+stessa aritmetica di `post-image.sh:318`:
+
+```
+mtdparts=spi0.0:0x400000@0x400000(uboot),0xc00000@0x800000(boot),-@0x2000000(rootfs)
+```
+
+|  | in `parameter.txt` (settori) | nella cmdline (byte) | |
+|---|---|---|---|
+| `uboot` | `0x00002000@0x00002000` | `0x400000@0x400000` | 4 MiB @ 4 MiB |
+| `boot` | `0x00006000@0x00004000` | `0xc00000@0x800000` | 12 MiB @ 8 MiB |
+| `rootfs` | `-@0x00010000` | `-@0x2000000` | grow @ 32 MiB |
+
+La size della rootfs resta `-`, cioe' `SIZE_REMAINING` (`cmdlinepart.c:48,90`),
+cosi' cresce fino alla fine del chip come fa `rootfs:grow` per il tool di
+flash. Sull'esemplare provato la NAND e' da 256 MiB e la partizione risulta di
+224, senza che la taglia del chip sia cablata da nessuna parte.
+
+> **Debito noto.** Il layout e' ora dichiarato in **tre** posti — a mano.
+> `parameter.txt` (per il flash), `linux-mainline.config` e
+> `linux-mainline-flash.config` (per il kernel). Nessuno li confronta
+> automaticamente. Se `parameter.txt` cambia, le altre due vanno cambiate con
+> lui, e il sintomo di una dimenticanza e' un rootfs che monta la partizione
+> sbagliata, non un errore di build.
+
+#### Il secondo fragment, e perche' la cmdline e' duplicata
+
+`CONFIG_CMDLINE` e' un simbolo string e Kconfig non sa appendere a un valore
+esistente. Per aggiungere il `root=` va riscritto tutto, quindi
+`linux-mainline-flash.config` contiene una seconda copia della stringa. Le due
+vanno tenute allineate a mano; la parte comune e' verificabile con un `diff`.
+
+L'ordine dei fragment e' garantito: `BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES`
+finisce in `LINUX_KCONFIG_FRAGMENT_FILES` (`linux/linux.mk:377`) e da li' nella
+riga di comando di `merge_config.sh` (`package/pkg-kconfig.mk:67`, invocato con
+`-m` e **senza** `-s`). `merge_config.sh` cancella il valore precedente e
+appende il nuovo (`scripts/kconfig/merge_config.sh:153-166`), quindi vince
+l'ultimo file e stampa
+
+```
+Value of CONFIG_CMDLINE is redefined by fragment .../linux-mainline-flash.config:
+```
+
+che e' il comportamento atteso: senza `-s` non e' un errore.
+
+I tre parametri aggiunti, e da dove viene ognuno:
+
+- `ubi.mtd=rootfs` — attacca UBI alla partizione **per nome**, non per indice:
+  `ubi_mtd_param_parse` prova `simple_strtoul` e, se la stringa non e' un
+  numero, chiama `get_mtd_device_nm()` (`drivers/mtd/ubi/build.c:1216-1225`).
+  Cosi' un riordino del layout non invalida la riga.
+- `root=ubi0:rootfs` — il nome del volume e' quello che scrive `ubinize`:
+  `vol_name=rootfs` in `buildroot/fs/ubi/ubinize.cfg:5`.
+- `rootfstype=ubifs` — UBIFS non e' auto-rilevabile da un `root=`: non c'e' un
+  blockdev da cui leggere un superblocco.
+
+#### La geometria UBIFS: copiata dal vendor, e poi verificata
+
+`lyra_plus_mainline_defconfig` usa gli stessi valori di `lyra_plus_defconfig`.
+Il `dmesg` ora permette di controllarli invece di fidarsi:
+
+| simbolo | valore | corrisponde a |
+|---|---|---|
+| `BR2_TARGET_ROOTFS_UBI_PEBSIZE` | `0x20000` (default) | `block size: 128 KiB` |
+| `BR2_TARGET_ROOTFS_UBI_SUBSIZE` | `2048` | `page size: 2048` |
+| `BR2_TARGET_ROOTFS_UBIFS_MINIOSIZE` | `0x800` (default) | idem, 2048 |
+| `BR2_TARGET_ROOTFS_UBIFS_LEBSIZE` | `0x1f000` | 131072 − 2×2048 = 126976 |
+
+Il `LEBSIZE` merita una riga: sono **due** pagine di header (EC e VID) e non
+una, perche' `SUBSIZE` e' uguale a `MINIOSIZE` — non c'e' subpage in cui
+impacchettarli. Con il subpage il valore sarebbe `0x1f800`, che e' appunto il
+default di Buildroot.
+
+`BR2_TARGET_ROOTFS_UBIFS_MAXLEBCNT=8456` invece **non** corrisponde a questa
+flash: 8456 × 126976 ≈ 1 GiB, mentre la partizione e' 224 MiB, cioe' ~1850
+LEB. E' un valore del vendor sovradimensionato. Non e' un bug — e' un
+*massimo*, e UBIFS rifiuta il mount solo nel caso opposto (`max_leb_cnt <
+leb_cnt`) — ma costa spazio nella LPT. `TODO(verify):` tararlo su una misura,
+non su una stima. E' lasciato identico al vendor di proposito: cambiarlo
+introdurrebbe una differenza dal percorso provato senza avere un dato che dica
+che e' meglio.
+
+Non serve invece dimensionare il volume: `vol_flags=autoresize` in
+`buildroot/fs/ubi/ubinize.cfg:7` lo fa crescere fino a riempire la partizione
+al primo attach.

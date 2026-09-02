@@ -53,9 +53,9 @@ Cosa trovi gia' funzionante:
 - accesso `adb` via USB
 - `hello-lyra`, che al boot dice se la board e' quella giusta e cosa vede
 - una variante `initramfs` per il bring-up senza dipendere dalla NAND
-- una variante con **kernel mainline 6.19** (`ttyS0`), accanto a quella
-  vendor 6.1 e non al suo posto: vedi
-  [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
+- due varianti con **kernel mainline 6.19** (`ttyS0`), accanto alle due
+  vendor 6.1 e non al loro posto — una initramfs e una con il rootfs su SPI
+  NAND: vedi [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
 
 Cosa cambiare appena forkato:
 
@@ -155,11 +155,14 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     ├── configs/
     │   ├── lyra_plus_defconfig            SPI NAND + UBIFS (produzione)
     │   ├── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
+    │   ├── lyra_plus_mainline_defconfig   SPI NAND + UBIFS, kernel MAINLINE 6.19
     │   └── lyra_plus_mainline_initramfs_defconfig
-    │                                      come sopra, ma kernel MAINLINE 6.19
+    │                                      rootfs in RAM, kernel MAINLINE 6.19
     ├── board/lyra-plus/
     │   ├── linux.config          fragment kernel vendor 6.1
-    │   ├── linux-mainline.config fragment kernel mainline 6.19
+    │   ├── linux-mainline.config fragment kernel mainline 6.19 (condiviso)
+    │   ├── linux-mainline-flash.config
+    │   │                         cmdline con root su UBIFS (solo mainline+flash)
     │   ├── uboot.config          fragment U-Boot
     │   ├── boot.its              sorgente FIT di boot.img
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
@@ -536,6 +539,57 @@ Il perché di ogni differenza è in
 [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *Il percorso
 mainline 6.19, accanto al vendor 6.1* — incluso il motivo per cui
 `resource.img` non si può togliere e `resource_tool` è stato vendorizzato.
+
+#### Con il rootfs sulla SPI NAND
+
+```bash
+make lyra_plus_mainline_defconfig
+make
+```
+
+È il controparte mainline di `lyra_plus_defconfig`: rootfs UBIFS sulla NAND
+invece che in RAM. Il diff fra i due defconfig mainline è **lo stesso** che
+separa i due vendor — rootfs UBI al posto di initramfs, `BR2_PACKAGE_MTD`,
+`host-genimage` — più una cosa in più: un secondo fragment kernel,
+`linux-mainline-flash.config`, applicato dopo quello condiviso.
+
+Il fragment in più serve per una ragione precisa, che vale la pena sapere
+prima di toccare il layout delle partizioni:
+
+> **Le partizioni MTD non possono arrivare da U-Boot su mainline.** Non è una
+> conseguenza di `CONFIG_CMDLINE_FORCE=y`: nemmeno rilassandolo funzionerebbe.
+> U-Boot genera un `mtdparts` corretto e in byte, ma con `mtd-id` `spi-nand0`,
+> perché il kernel **vendor** forza `mtd->name = "spi-nand0"` con una patch
+> locale Rockchip. Mainline non ha quella patch e il nome del device MTD
+> diventa `spi0.0`; `cmdlinepart` pretende che l'`mtd-id` combaci
+> esattamente, quindi la stringa di U-Boot viene scartata in silenzio. Anche
+> il `CMDLINE:` di `parameter.txt` non serve: ha `mtd-id` vuoto (che non è un
+> jolly) e le size in settori — è il formato per il tool di flash, non una
+> cmdline Linux.
+>
+> Il layout è quindi dichiarato **nella nostra cmdline**, con l'`mtd-id` di
+> mainline e in byte. Costo: lo stesso layout è scritto in tre posti
+> (`parameter.txt` e i due fragment) e **nessuno li confronta**. Se cambi
+> `parameter.txt`, cambia anche i due fragment. Le righe di sorgente che
+> inchiodano la diagnosi sono in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *La SPI
+> NAND su mainline, e l'`mtd-id` che nessuno fa combaciare*.
+
+La buona notizia è l'altra metà: **il driver SPI NAND di mainline guida
+l'FSPI del RK3506 senza una riga di modifica al kernel.** Un solo compatible
+generico `rockchip,sfc`, versione dell'IP letta a runtime dal registro
+`SFC_VER`, nessuna tabella per SoC da estendere. Tutto il lavoro è il device
+tree. Sull'hardware:
+
+```
+spi-nand spi0.0: Winbond SPI NAND was found.
+spi-nand spi0.0: 256 MiB, block size: 128 KiB, page size: 2048, OOB size: 128
+3 cmdlinepart partitions found on MTD device spi0.0
+```
+
+Nota per non cercare dalla parte sbagliata: **`rockchip-sfc` non compare nel
+`dmesg` nemmeno quando funziona.** Quel driver non ha un solo `dev_info`, solo
+`dev_err` e `dev_dbg`. La prova che il probe è andato è che esiste `spi0.0`.
 
 ### Iterare su `hello-lyra`
 

@@ -449,6 +449,133 @@ lista e rientra, facendo ricrescere lo `zImage`. Non c'e' un modo dichiarativo
 di dire "solo Rockchip" partendo da `multi_v7_defconfig`; il controllo che se
 ne accorge e' la verifica dimensioni, che fa fallire la build.
 
+### Il kernel non puo' stare a 0x8000: la' c'e' OP-TEE
+
+Questo e' costato l'intero bring-up, e vale la pena scriverlo per esteso
+perche' il sintomo non somiglia alla causa.
+
+Il boot si fermava dopo `Starting kernel ...` **senza stampare un solo
+carattere**: non con `earlycon`, non con `CONFIG_DEBUG_LL`, niente.
+
+#### Perche' il silenzio non diceva nulla
+
+La finestra in cui il boot ARM puo' morire muto e' prima che esista una
+console:
+
+| | |
+|---|---|
+| `setup.c:1106` | `mdesc = setup_machine_fdt(atags_vaddr);` |
+| `setup.c:1138` | `parse_early_param();` — earlycon nasce qui |
+
+e in quella finestra `early_print()` raggiunge una UART **solo** con
+`CONFIG_DEBUG_LL` (`setup.c:368-370`); altrimenti e' un `printk` in un ring
+buffer senza console, e `dump_machine_table()` finisce in `while (true);`
+(`setup.c:756-757`). Il silenzio era percio' la firma *attesa* di qualunque
+errore in quella finestra: non discriminava fra le cause.
+
+#### Due ipotesi sbagliate, per non rifarle
+
+**`rockchip,rk3506` non e' in `rockchip_board_dt_compat[]`.** Vero, e sembra
+decisivo. Non lo e': `devtree.c:196-201` definisce un `GENERIC_DT` di
+fallback e `fdt.c:763` fa `best_data = default_match`, quindi un compatible
+non riconosciuto ripiega su "Generic DT based system" invece di morire. Il
+kernel **vendor** non elenca `rk3506` e boota: ripiegano entrambi.
+
+**Il DTB viene sovrascritto dal kernel decompresso.** Plausibile — il
+bootloader lo mette a `0x63000`, appena 372 KiB sopra `0x8000` — e il
+decompressore protegge solo se stesso (`head.S:449-465`), mai il DTB passato
+in `r2`. Smentita sulla board: spostandolo con `setenv fdt_addr_r 0x02000000`
+il silenzio e' rimasto identico.
+
+#### La causa vera
+
+Non il kernel, non il DTB: l'indirizzo a cui lavora il **decompressore**.
+
+`AUTO_ZRELADDR` (obbligatorio su `ARCH_MULTIPLATFORM`) ricava l'inizio della
+RAM mascherando il PC:
+
+```
+head.S:279-280   mov r0, pc; and r0, r0, #0xf8000000   ->  0x00000000
+head.S:312       add r4, r0, #TEXT_OFFSET              ->  0x00008000
+```
+
+e `fdt_check_mem_start()` non lo corregge, perche' `memory@0` dichiara la RAM
+da 0 e quindi 0 e' un indirizzo valido (`fdt_check_mem_start.c:146-148`,
+*"Calculated address is valid, use it"*). Da li':
+
+```
+head.S:793   __setup_mmu: sub r3, r4, #16384    ->  page directory a 0x00004000
+```
+
+16 KiB di scritture da `0x4000` a `0x8000`. Quell'intervallo e' dentro
+`trust@0` (`0x0-0x62000`), la regione di **OP-TEE**, che il firewall del SoC
+rende inaccessibile dal normal world. La prova, dal prompt U-Boot — che gira
+anch'esso in normal world:
+
+```
+=> md 0x4000 4
+00004000:data abort
+pc : 00254086  lr : 00254029
+### ERROR ### Please RESET the board ###
+```
+
+Non passa nemmeno una **lettura**. Il decompressore aborta quindi alla prima
+scrittura della page directory, dentro `cache_on`, **prima** di
+`decompress_kernel()`: il suo primo `putstr()` non viene mai raggiunto, ed e'
+per questo che accendere `DEBUG_LL` non cambiava niente.
+
+Che il kernel decompresso vada *sopra* la regione riservata era scritto nella
+mappa del bootloader, `u-boot/include/configs/rk3506_common.h:58-70`:
+
+```
+ *     fdt:  396K - 524K
+ *   Image:  1M+32k - 16M
+ *  zImage:  16M - 24M
+```
+
+`kernel_addr_r=0x00108000`. Il vincolo c'era; il kernel non lo sapeva.
+
+#### La correzione
+
+`linux,usable-memory-range = <0x00200000 0x07e00000>` nel nodo `/chosen`
+(patch in `board/lyra-plus/patches-mainline/`). Fa due cose:
+
+- `fdt_check_mem_start()` ritorna `round_up(base, SZ_2M)` invece del PC
+  mascherato → page directory a `0x00204000`, kernel a `0x00208000`, liberi
+  da OP-TEE (`0x62000`), DTB (`0x63000`) e ramoops (`0x83000`);
+- `early_init_dt_check_for_usable_mem_range()` (`of/fdt.c:884-916`, senza
+  guardia di config) taglia `memblock`, cosi' la regione firewallata esce
+  dalla vista del kernel e nessun accesso dalla linear map puo' abortire —
+  che chiude anche il `TODO(verify)` su `trust@0`, privo di `no-map`.
+
+Risultato:
+
+```
+# uname -a
+Linux lyra-plus 6.19.0 #2 SMP armv7l GNU/Linux
+```
+
+`SMP` non e' un dettaglio: PSCI ha `method = "smc"`, servito da OP-TEE. Se il
+kernel avesse comunque scritto su quella regione, il secondo core non
+partirebbe. E' la conferma che ora la lascia in pace.
+
+**Prezzo dichiarato:** `ramoops@83000` sta sotto il cap e non e' piu'
+riservabile, quindi niente pstore. Per riaverlo va spostata la regione
+ramoops sopra i 2 MiB, nel DTS.
+
+**Scartata:** spedire `Image` invece di `zImage`. U-Boot carica un kernel non
+compresso direttamente a `kernel_addr_r = 0x00108000`, sopra OP-TEE, senza
+decompressore e quindi senza page directory a `0x4000`: avrebbe risolto da
+se'. Ma `Image` e' 16.61 MiB e la partizione `boot` e' 12 MiB.
+
+**Resta aperto:** perche' il kernel vendor 6.1 bootasse. Ha
+`CONFIG_AUTO_ZRELADDR=y`, il suo decompressore e' identico (stesso
+`sub r3, r4, #16384`) e la sua catena DTS non ha ne' `/memory` ne'
+`linux,usable-memory-range` — quindi dovrebbe finire nello stesso abort. Il
+log di boot vendor lo chiarirebbe; fino ad allora la domanda e' aperta, e
+vale la pena chiedersi se l'immagine vendor di questo albero sia mai stata
+avviata o se il "funziona" venisse dalle immagini dell'SDK.
+
 ### I DTB dei due kernel non sono interscambiabili
 
 Questa è la trappola grossa, e non dà nessun messaggio di errore.

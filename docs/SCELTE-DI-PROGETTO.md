@@ -449,6 +449,103 @@ lista e rientra, facendo ricrescere lo `zImage`. Non c'e' un modo dichiarativo
 di dire "solo Rockchip" partendo da `multi_v7_defconfig`; il controllo che se
 ne accorge e' la verifica dimensioni, che fa fallire la build.
 
+### Cosa ha rivelato il primo boot
+
+Due cose che nessuna analisi statica avrebbe trovato, e che si vedono solo con
+la board che parla. Stanno nella sezione `(5/5)` di `linux-mainline.config`,
+con le righe di `dmesg` da cui vengono.
+
+**64 MiB su 128 riservati a niente.** `multi_v7_defconfig:1305` imposta
+`CONFIG_CMA_SIZE_MBYTES=64`:
+
+```
+cma: Reserved 64 MiB at 0x04000000
+Memory: 48024K/129024K available (... 65536K cma-reserved ...)
+```
+
+48 MB utilizzabili su 128. CMA lo vogliono DRM, V4L2 e MMC, che sono tutti
+spenti: e' RAM riservata per nessun utente. Spento.
+
+**Nove driver ancora vivi dopo il pruning delle piattaforme**, perche' non
+sono gated su un simbolo `ARCH_*` e restano da `multi_v7_defconfig`: PL011,
+ST ASC, SCSI, libata, squashfs, brd, loop, SCMI, EDAC. Nessuno ha un nodo nel
+DT che lo reclami, e ognuno e' un probe in piu'. E' la dimostrazione che
+spegnere le piattaforme non basta ad avere un kernel minimale: il pruning per
+sottosistema della sezione `(3/5)` serve, e non e' completo per costruzione —
+si allunga a ogni boot che rivela qualcosa.
+
+### Quanto divergiamo da mainline, e cosa costa il salto a 7.0
+
+Il senso del percorso mainline e' capire quanto di questa board si regge su
+codice upstream, e potersi spostare dalla 6.19 alla 7.0 toccando poco. Questo
+richiede una regola su *dove* possono stare le modifiche, non solo quante
+sono.
+
+**La regola: zero patch al codice del kernel.** Oggi e' rispettata.
+
+| cosa | e' divergenza? | stato |
+|---|---|---|
+| patch al **codice** del kernel (`.c`, `.S`, Kconfig) | si, la peggiore | **nessuna** |
+| patch portate dal framework a un sorgente di terzi | si | **nessuna** |
+| proprieta' nel DTS **della nostra board** | **no** | due, nel repo kernel |
+| fragment di config (`linux-mainline.config`) | no | uno |
+
+La distinzione che conta e' la terza. `rk3506g-luckfox-lyra-plus.dts` **non e'
+ancora in mainline**: e' il nostro contributo in corso, nel branch
+`rk3506-lyra-plus`. Aggiungerci una proprieta' corretta non e' forkare Linux,
+e' scrivere il supporto della board. Quando la board andra' upstream, la
+proprieta' va con lei e la divergenza e' zero per costruzione.
+
+Il che vale solo se la proprieta' e' *giusta*, non un aggiramento. Per
+`linux,usable-memory-range` il precedente in-tree c'e', su una board ARMv7 e
+per lo stesso identico motivo — `arch/arm/boot/dts/airoha/en7523-evb.dts:19-21`:
+
+```dts
+/* Bootloader installs ATF here */
+/memreserve/ 0x80000000 0x200000;
+...
+	chosen {
+		linux,usable-memory-range = <0x80200000 0x1fe00000>;
+	};
+```
+
+Firmware sicuro in fondo alla RAM, `/memory` che descrive tutto, e la
+proprieta' che sposta Linux 2 MiB piu' in su. Stesso offset. Un secondo
+precedente, con il motivo scritto nel commento, e'
+`arch/arm/boot/dts/samsung/exynos4212-tab3.dtsi:53`.
+
+#### Il costo ricorrente non e' nel kernel, e' nel fragment
+
+Le tre cose che si romperanno alzando la versione del kernel, in ordine di
+probabilita':
+
+1. **La lista delle piattaforme da spegnere.** 72 simboli `ARCH_*` e 41
+   `SOC_*`. Se mainline aggiunge una famiglia di SoC, quella non e' nella
+   lista, rientra, e lo `zImage` ricresce. Non e' silenzioso: la verifica
+   dimensioni di `post-image.sh` fa **fallire la build** invece di produrre
+   un'immagine che non entra in partizione. Il comando per rigenerare le due
+   liste dai Kconfig del kernel e' nel commento del fragment.
+2. **I nomi dei simboli di config.** Upstream li rinomina e li rimuove senza
+   preavviso. `merge_config` avvisa su un simbolo ridefinito, ma **non** su un
+   simbolo che non esiste piu': quello sparisce in silenzio. Il controllo che
+   se ne accorge e' rileggere il `.config` finale, non il fragment — che e' la
+   ragione per cui la verifica del Passo 5 guarda il `.config` prodotto.
+3. **`rk3506_minimal.config` in-tree**, di cui il fragment e' una copia
+   dichiarata. Se cambia nel repo kernel, va riallineata a mano; il comando di
+   diff e' nel commento.
+
+#### Cosa NON e' stato fatto, e perche'
+
+**`rockchip,rk3506` non e' in `rockchip_board_dt_compat[]`**
+(`arch/arm/mach-rockchip/rockchip.c:54-63`), quindi la board ripiega su
+`GENERIC_DT` invece di usare il machine descriptor Rockchip. Non e' fatale —
+lo dimostra il fatto che boota, e che il kernel vendor fa lo stesso — ma
+significa che `rockchip_dt_init()` non gira e quindi nemmeno
+`rockchip_suspend_init()`. Aggiungerlo sarebbe una riga, ed e' una patch al
+**codice**, non al DTS: prima di scriverla va capito cosa
+`rockchip_suspend_init()` faccia su un SoC che non conosce. Fuori scope per un
+bring-up da console, ma e' il primo candidato quando servira' il suspend.
+
 ### Il kernel non puo' stare a 0x8000: la' c'e' OP-TEE
 
 Questo e' costato l'intero bring-up, e vale la pena scriverlo per esteso
@@ -537,8 +634,10 @@ mappa del bootloader, `u-boot/include/configs/rk3506_common.h:58-70`:
 
 #### La correzione
 
-`linux,usable-memory-range = <0x00200000 0x07e00000>` nel nodo `/chosen`
-(patch in `board/lyra-plus/patches-mainline/`). Fa due cose:
+`linux,usable-memory-range = <0x00200000 0x07e00000>` nel nodo `/chosen`, nel
+**repo del kernel** (`rk3506-kernel-upstream`, commit `c6c820d6`): il DTS e' di
+questa board, e la correzione va dove vive il DTS. Il framework non porta
+nessuna patch al kernel. Fa due cose:
 
 - `fdt_check_mem_start()` ritorna `round_up(base, SZ_2M)` invece del PC
   mascherato → page directory a `0x00204000`, kernel a `0x00208000`, liberi
@@ -559,9 +658,18 @@ Linux lyra-plus 6.19.0 #2 SMP armv7l GNU/Linux
 kernel avesse comunque scritto su quella regione, il secondo core non
 partirebbe. E' la conferma che ora la lascia in pace.
 
-**Prezzo dichiarato:** `ramoops@83000` sta sotto il cap e non e' piu'
-riservabile, quindi niente pstore. Per riaverlo va spostata la regione
-ramoops sopra i 2 MiB, nel DTS.
+**Non costa niente.** Avevo previsto la perdita di `pstore`, assumendo che
+`memblock_cap_memory_range()` impedisse la riserva di `ramoops@83000`, che sta
+sotto il floor dei 2 MiB. Sbagliato: il cap toglie la RAM all'**allocatore**,
+non a `reserved-memory`. Il `dmesg` del primo boot riuscito lo mostra senza
+ambiguita':
+
+```
+OF: fdt: Ignoring memory range 0x0 - 0x200000
+OF: reserved mem: 0x00083000..0x000affff (180 KiB) map non-reusable ramoops@83000
+pstore: Registered ramoops as persistent store backend
+ramoops: using 0x2d000@0x83000, ecc: 0
+```
 
 **Scartata:** spedire `Image` invece di `zImage`. U-Boot carica un kernel non
 compresso direttamente a `kernel_addr_r = 0x00108000`, sopra OP-TEE, senza

@@ -165,8 +165,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
     │   ├── rkbin.sha256          hash attesi dei blob vendor
     │   ├── dts/                  DTS custom (variante initramfs)
-    │   ├── patches/{linux,uboot}/  patch numerate a kernel e U-Boot (condivise)
-    │   ├── patches-mainline/linux/ patch solo per il percorso mainline
+    │   ├── patches/{linux,uboot}/  patch numerate a kernel e U-Boot
     │   ├── genimage.cfg          flash.img, immagine raw full-chip
     │   ├── post-build.sh         ritocchi al rootfs
     │   ├── post-image.sh         **la catena di packaging Rockchip**
@@ -362,28 +361,24 @@ Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
 > partizione invece, sono in
 > [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
 
-> #### Perché serve una patch al DTS
+> #### Il DTS dichiara quale RAM è di Linux
 >
-> `patches-mainline/linux/0001-dts-keep-linux-out-of-the-op-tee-region.patch`
-> aggiunge `linux,usable-memory-range` a `/chosen`. **Senza, la board non
-> parte e non stampa niente** — nemmeno con `earlycon`, nemmeno con
-> `CONFIG_DEBUG_LL`.
+> Il DTS di board ha `linux,usable-memory-range = <0x00200000 0x07e00000>` in
+> `/chosen`. **Senza, la board non parte e non stampa niente** — nemmeno con
+> `earlycon`, nemmeno con `CONFIG_DEBUG_LL`.
 >
 > Con `AUTO_ZRELADDR` il decompressore mette la propria page directory a
 > `0x00004000` e il kernel a `0x00008000`, dentro la regione di OP-TEE
 > (`trust@0`, `0x0–0x62000`), che il firewall del SoC rende inaccessibile dal
-> normal world: dal prompt U-Boot anche un semplice `md 0x4000` da' *data
-> abort*. La patch sposta page directory e kernel a `0x00204000` /
+> normal world: dal prompt U-Boot anche un semplice `md 0x4000` dà *data
+> abort*. La proprietà sposta page directory e kernel a `0x00204000` /
 > `0x00208000`.
 >
-> Costa `pstore`: `ramoops@83000` finisce sotto il cap e non è più
-> riservabile. La ricostruzione completa del problema, con i riferimenti al
-> sorgente e le due ipotesi sbagliate scartate lungo la strada, è in
+> Sta nel **repo del kernel**, non qui: il DTS è di questa board e la
+> correzione va dove vive il DTS. Il framework non porta nessuna patch al
+> kernel. La ricostruzione completa, con i riferimenti al sorgente e le due
+> ipotesi sbagliate scartate lungo la strada, è in
 > [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
->
-> La patch è un rimedio nel posto sbagliato: il DTS vive in
-> `rk3506-kernel-upstream` e la correzione va lì. Quando ci sarà, la patch si
-> rimuove e si alza lo SHA.
 
 > #### ⚠️ I due `boot.img` non vanno mescolati
 >

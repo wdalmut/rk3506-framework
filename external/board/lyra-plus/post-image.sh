@@ -290,6 +290,12 @@ else
 	[ -f "$BINARIES_DIR/rootfs.ubi" ] || die "rootfs.ubi non prodotto da Buildroot"
 	# Rockchip si aspetta rootfs.img; Buildroot produce rootfs.ubi.
 	cp -f "$BINARIES_DIR/rootfs.ubi" "$BINARIES_DIR/rootfs.img"
+	# Simmetrico al ramo sopra: passando da un defconfig initramfs a uno con
+	# rootfs su flash, Buildroot non ricostruisce rootfs.cpio ma nemmeno lo
+	# cancella, e resta in images/ con la data del build precedente. Nessuno
+	# lo usa - boot.img qui non lo incorpora - ma un artefatto stantio in
+	# images/ e' una trappola: sembra parte di questo build e non lo e'.
+	rm -f "$BINARIES_DIR/rootfs.cpio"
 fi
 
 # Controllo che l'SDK fa in mk-firmware.sh:52-64: ogni immagine deve entrare

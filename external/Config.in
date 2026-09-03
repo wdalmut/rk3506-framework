@@ -57,6 +57,10 @@ config BR2_LYRA_PACKTOOL_DIR
 	  produce comunque tutti gli altri artefatti. Le immagini per
 	  partizione restano flashabili singolarmente con rkdeveloptool.
 
+comment "Tool di packaging ricompilabili dai sorgenti"
+
+source "$BR2_EXTERNAL_LYRA_PLUS_PATH/package/rk-resource-tool/Config.in"
+
 comment "Applicazioni"
 
 source "$BR2_EXTERNAL_LYRA_PLUS_PATH/package/hello-lyra/Config.in"

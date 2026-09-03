@@ -233,3 +233,1031 @@ vera. rkbin è 57 MB, quindi `post-image.sh` la rsyncia in
 > Sottigliezza: se una versione precedente aveva lasciato lì un symlink,
 > `mkdir -p` lo attraversa e `rsync` scrive nella sorgente. `post-image.sh`
 > rimuove esplicitamente un eventuale symlink prima di creare la directory.
+
+---
+
+## Il percorso mainline 6.19, accanto al vendor 6.1
+
+`lyra_plus_mainline_initramfs_defconfig` costruisce la stessa board con un
+kernel **mainline 6.19.0** invece del vendor 6.1.99. È un terzo percorso, non
+una sostituzione: i due defconfig vendor restano come termine di paragone.
+Quando il mainline non arriva al prompt, la domanda "è il kernel o è il
+packaging?" si risponde flashando l'altro.
+
+Cosa cambia, e perché:
+
+| | vendor | mainline |
+|---|---|---|
+| kernel | `rk3506-kernel.git` 6.1.99 | `rk3506-kernel-upstream.git` 6.19.0 |
+| defconfig kernel | `rk3506_luckfox` | `multi_v7` + fragment |
+| fragment | `linux.config` | `linux-mainline.config` |
+| DTB | in-tree o custom, senza sottodirectory | `rockchip/rk3506g-luckfox-lyra-plus` |
+| console | `ttyFIQ0` (fiq-debugger) | `ttyS0` (8250-dw) |
+| storage | SPI NAND / UBI, oppure initramfs | solo initramfs |
+| `resource_tool` | dal kernel | host package `rk-resource-tool` |
+| U-Boot | invariato: stesso repo, stesso SHA, stesso fragment | idem |
+
+`ttyFIQ0` non esiste in mainline: è la tty del *FIQ debugger* Rockchip
+(`CONFIG_FIQ_DEBUGGER`), che non è mai stato mandato upstream. La stessa UART0
+`@0xff0a0000` viene quindi guidata dal driver 8250-dw standard e si chiama
+`ttyS0`. Il baudrate resta **1500000**, non 115200.
+
+### I bootargs arrivano dal kernel, non dal DTS
+
+`linux-mainline.config` imposta `CONFIG_CMDLINE` + `CONFIG_CMDLINE_FORCE=y`.
+Il DTS in-tree ha solo `stdout-path` (`rk3506g-luckfox-lyra-plus.dts:14-16`),
+mentre il DTS custom vendor si portava dietro i bootargs in `/chosen`.
+`CMDLINE_FORCE` fa una cosa sola ma utile: toglie U-Boot dall'equazione. Se la
+board resta muta, la cmdline non è tra i sospetti. Ottenuto il prompt si può
+rilassare.
+
+### `resource.img`: perché è obbligatorio
+
+Verrebbe voglia di togliere il nodo `resource` da `boot.its` e chiudere la
+questione senza vendorizzare niente. **Non si può**, e la ragione è nel
+sorgente di U-Boot.
+
+Con `CONFIG_ROCKCHIP_RESOURCE_IMAGE=y` (attivo: si legge in
+`output/build/uboot-*/.config`) il ramo che leggerebbe il DTB dal nodo `fdt`
+del FIT è compilato via:
+
+```c
+/* arch/arm/mach-rockchip/boot_rkimg.c:516-519 */
+} else if (where == LOCATE_FIT) {
+#if defined(CONFIG_ROCKCHIP_FIT_IMAGE) && !defined(CONFIG_ROCKCHIP_RESOURCE_IMAGE)
+        return fit_image_read_dtb(fdt);
+#endif
+```
+
+L'unica via che resta è `LOCATE_RESOURCE` (`boot_rkimg.c:491-497`), cioè
+`rockchip_read_resource_dtb()` → `resource_scan()` → `fit_image_init_resource()`
+(`fit.c:439`), che cerca il nodo `multi` e senza quello ritorna `-EINVAL`
+(`fit.c:453-455`). Il risultato a runtime è `Failed to load DTB, ret=-22`
+seguito da `No valid DTB` (`boot_rkimg.c:499` e `:536`), e il boot si ferma
+lì.
+
+Detto in una riga: **U-Boot prende il DTB del kernel da `resource.img`, non dal
+nodo `fdt` del FIT.** `resource.img` non è un accessorio per i logo di boot.
+
+Togliere il nodo avrebbe quindi richiesto di spegnere
+`CONFIG_ROCKCHIP_RESOURCE_IMAGE` in U-Boot, cioè cambiare il bootloader — e
+il senso di questo defconfig è cambiare **solo** il kernel, per avere un
+confronto pulito. Quindi: `resource_tool` vendorizzato.
+
+### `resource_tool` come host package, non compilato al volo
+
+Nel kernel vendor il tool si costruisce da sé, perché `scripts/Makefile:9` lo
+dichiara `hostprogs-always-$(CONFIG_ARCH_ROCKCHIP)`. In mainline
+`scripts/resource_tool.c` non esiste: non è mai stato mandato upstream.
+
+Il sorgente è vendorizzato in `external/package/rk-resource-tool/src/`, con
+provenienza, sha256 e licenza in
+[../external/package/rk-resource-tool/README.md](../external/package/rk-resource-tool/README.md) —
+la stessa disciplina che `board/lyra-plus/rkbin.sha256` applica ai blob.
+
+È un **host package Buildroot** e non un `cc` dentro `post-image.sh`, per
+quattro motivi concreti:
+
+1. `post-image.sh` gira una volta per build, alla fine. Un `cc` lì dentro
+   ricompila ogni volta e, se fallisce, fallisce *dopo* trenta minuti di
+   toolchain e kernel.
+2. Il compilatore host e i suoi flag li decide Buildroot (`$(HOSTCC)`,
+   `$(HOST_CFLAGS)`), non lo script. Nel container o fuori, sono gli stessi.
+3. La dipendenza diventa **dichiarata**: `BR2_PACKAGE_HOST_RK_RESOURCE_TOOL=y`
+   sta nel defconfig, si vede in `make menuconfig`, e `make legal-info` vede
+   la licenza GPL-2.0+ di Rockchip invece di ignorarla.
+4. `post-image.sh` resta uno script di packaging e non diventa anche un build
+   system.
+
+`post-image.sh` preferisce comunque sempre `$LINUX_DIR/scripts/resource_tool`
+se c'è: il percorso vendor non cambia di una riga, e non c'è modo che i due
+defconfig vendor comincino a usare il binario dell'host package senza che
+nessuno l'abbia chiesto.
+
+### `multi_v7_defconfig` non entra nella partizione `boot`
+
+Il fragment `linux-mainline.config` spegne 72 famiglie di SoC ARM e una
+quindicina di sottosistemi. Non e' zelo: senza, la build **non passa**.
+
+`multi_v7_defconfig` e' un defconfig multi-piattaforma, accende 76 famiglie di
+SoC ARMv7 e RK3506 e' una di quelle. Il risultato:
+
+```
+>>> lyra-plus: verifica dimensioni contro parameter.txt
+    uboot        4.00 MiB /     4.00 MiB  OK
+    boot        15.09 MiB /    12.00 MiB  TROPPO GRANDE
+```
+
+Non e' un problema di rootfs. L'initramfs e' gia' compresso *dentro* il kernel
+(`CONFIG_INITRAMFS_COMPRESSION_GZIP=y`) e `arch/arm/boot/Image` non compresso
+e' **34.90 MiB**: il solo kernel compresso e' circa 13 MiB, quindi non
+entrerebbe nei 12 MiB nemmeno con un rootfs vuoto.
+
+Misurato su questo albero, con la toolchain di Buildroot:
+
+| configurazione | `zImage` | `boot.img` | entra in 12 MiB? |
+|---|---|---|---|
+| `multi_v7` + fragment minimale | 15.07 MiB | 15.09 MiB | no |
+| + 72 piattaforme estranee spente | 12.11 MiB | ~12.13 MiB | no, per 0.13 MiB |
+| + sottosistemi fuori scope spenti | 6.30 MiB | 6.32 MiB | si |
+| + i 41 `SOC_*` (chiude il buco OMAP) | **6.16 MiB** | **6.18 MiB** | si, 5.8 MiB di margine |
+
+L'ultima riga e' la configurazione attuale del fragment.
+
+Il confronto giusto e' con l'altro defconfig **initramfs**, non con quello su
+NAND: e' l'unico che mette il rootfs dentro `boot.img` come fa questo.
+
+| defconfig | `zImage` | `rootfs.cpio` | `boot.img` |
+|---|---|---|---|
+| `lyra_plus_initramfs_defconfig` (vendor 6.1) | 8.83 MiB | 10.48 MiB | **10.32 MiB** |
+| `lyra_plus_mainline_initramfs_defconfig` | 6.16 MiB | 4.67 MiB | **6.18 MiB** |
+
+L'immagine mainline sfoltita e' quindi **piu' piccola** di quella vendor, non
+piu' grande: il kernel e' di poco superiore (circa 4 MiB contro 4.19 MiB senza
+initramfs), ma il rootfs e' meno di meta' perche' non porta ne' i tool MTD ne'
+android-tools/adbd, che in questo bring-up non servono.
+
+Tutte le misure di `zImage` sono **con l'initramfs incorporato**, perche' e'
+quello che finisce in `boot.img`: Buildroot ricompila il kernel dopo aver
+generato `rootfs.cpio` (`>>>   Rebuilding kernel with initramfs`). Il solo
+kernel, senza initramfs, e' circa 4 MiB — la taglia del vendor. Non
+e' mainline a essere grosso: e' `multi_v7_defconfig` non sfoltito.
+
+Notare la riga di mezzo: il pruning delle sole piattaforme **non basta**,
+manca per 0.13 MiB. E' il motivo per cui il fragment spegne anche
+`CONFIG_NET`, `CONFIG_FTRACE`, `CONFIG_PCI` e compagnia, e non si e' fermato
+alle piattaforme. Quel 12.11 viene da un esperimento incrementale (`sed` sul
+`.config` gia' risolto piu' `olddefconfig`) e non da un merge pulito, quindi
+va letto come ordine di grandezza; il punto che conta e' che non bastava.
+
+### Tre simboli che il fragment non riesce a spegnere
+
+La verifica va fatta sul `.config` **finale**, non sul fragment: `olddefconfig`
+riaccende per `select` quello che qualcuno tira dentro. Su questo albero sono
+tre, tutti spiegati:
+
+| simbolo | chi lo riaccende | si puo' togliere? |
+|---|---|---|
+| `REGULATOR=y` | `arch/arm/mach-rockchip/Kconfig:16` — `ARCH_ROCKCHIP` fa `select REGULATOR` | **no**, e' la piattaforma che vogliamo |
+| `INPUT=y` | `drivers/tty/Kconfig:14-15` — `config VT` fa `select INPUT` | si, spegnendo `CONFIG_VT`; non fatto, costa poco |
+| `ARCH_OMAP=y` | `SOC_AM33XX`/`SOC_AM43XX`/`SOC_DRA7XX`/`SOC_OMAP5` fanno `select ARCH_OMAP2PLUS` (`arch/arm/mach-omap2/Kconfig`) | **si, ed e' stato fatto** |
+
+L'ultimo era un buco vero nella lista: la prima versione intersecava solo i
+simboli `ARCH_*`, e OMAP rientrava dai `SOC_*`, restando compilato dentro
+nonostante `# CONFIG_ARCH_OMAP is not set`. Per questo la ricetta di
+rigenerazione nel fragment copre `(ARCH|SOC)_` e non solo `ARCH_`.
+
+#### Perche' non allargare la partizione, invece
+
+Si poteva: fra la fine di `boot` (20 MiB) e l'inizio di `rootfs` (32 MiB) ci
+sono 12 MiB non allocati, quindi `boot` potrebbe passare da `0x6000` a
+`0xC000` settori senza spostare `rootfs`. Scartata perche' `parameter.txt` e'
+**condiviso** dai tre defconfig ed e' la tabella partizioni che si flasha:
+cambiarlo per far entrare il kernel mainline avrebbe cambiato il layout anche
+delle due immagini vendor, che oggi funzionano. Un percorso nuovo non deve
+ritoccare la baseline del percorso che serve da termine di paragone.
+
+E nel merito: un kernel da 15 MiB per arrivare a stampare su una UART e'
+sproporzionato, e ogni driver in piu' e' un probe in piu' che puo' fallire
+prima che la console sia viva — che e' esattamente cio' che
+`rk3506_minimal.config` dice di voler evitare. Il vincolo di dimensione ha
+solo reso obbligatorio un criterio che era gia' dichiarato.
+
+#### Il prezzo: niente rete
+
+`CONFIG_NET is not set` significa nessuna rete in questa immagine. E' una
+scelta, non un effetto collaterale: l'immagine si usa dalla seriale. Per
+coerenza il defconfig toglie anche `BR2_PACKAGE_IFUPDOWN_SCRIPTS`, che
+altrimenti installerebbe un `S40network` destinato a fallire a ogni boot
+(`/etc/network/interfaces` ha solo `lo`, e senza `CONFIG_NET` nemmeno `lo`
+esiste) sporcando l'unico strumento diagnostico che c'e'.
+
+Per riabilitarla: togliere la riga dal fragment e rimettere il package nel
+defconfig. C'e' margine — 6.18 contro 12.00 MiB — ma la verifica dimensioni di
+`post-image.sh` resta il guardrail, e fallisce la build invece di produrre
+un'immagine non flashabile.
+
+#### La lista delle piattaforme non e' scritta a mano
+
+Viene dai Kconfig del kernel, intersecando i simboli di piattaforma
+(`arch/arm/Kconfig.platforms` e `arch/arm/mach-*/Kconfig`) con quelli che
+`multi_v7_defconfig` accende, meno Rockchip e meno l'infrastruttura
+multi-piattaforma. Il comando per rigenerarla e' nel commento del fragment.
+
+Limite noto: se mainline aggiunge una piattaforma nuova, quella non e' nella
+lista e rientra, facendo ricrescere lo `zImage`. Non c'e' un modo dichiarativo
+di dire "solo Rockchip" partendo da `multi_v7_defconfig`; il controllo che se
+ne accorge e' la verifica dimensioni, che fa fallire la build.
+
+### Cosa ha rivelato il primo boot
+
+Due cose che nessuna analisi statica avrebbe trovato, e che si vedono solo con
+la board che parla. Stanno nella sezione `(5/5)` di `linux-mainline.config`,
+con le righe di `dmesg` da cui vengono.
+
+**64 MiB su 128 riservati a niente.** `multi_v7_defconfig:1305` imposta
+`CONFIG_CMA_SIZE_MBYTES=64`:
+
+```
+cma: Reserved 64 MiB at 0x04000000
+Memory: 48024K/129024K available (... 65536K cma-reserved ...)
+```
+
+48 MB utilizzabili su 128. CMA lo vogliono DRM, V4L2 e MMC, che sono tutti
+spenti: e' RAM riservata per nessun utente. Spento, e misurato sulla board:
+
+```
+# free -m
+              total        used        free      shared  buff/cache   available
+Mem:            116           9         100           5           7          99
+```
+
+Da ~47 MB utilizzabili a 116 di totale: **69 MB recuperati**, i 64 MiB di CMA
+piu' il kernel piu' piccolo.
+
+**Nove driver ancora vivi dopo il pruning delle piattaforme**, perche' non
+sono gated su un simbolo `ARCH_*` e restano da `multi_v7_defconfig`: PL011,
+ST ASC, SCSI, libata, squashfs, brd, loop, SCMI, EDAC. Nessuno ha un nodo nel
+DT che lo reclami, e ognuno e' un probe in piu'. E' la dimostrazione che
+spegnere le piattaforme non basta ad avere un kernel minimale: il pruning per
+sottosistema della sezione `(3/5)` serve, e non e' completo per costruzione —
+si allunga a ogni boot che rivela qualcosa.
+
+### Il container non ha credenziali, e GitHub ha smesso di servire i fetch anonimi
+
+Il `Makefile` monta nel container solo `/work`, con `HOME=/tmp`. Niente
+`~/.ssh`, niente `~/.gitconfig`, niente credential helper, verificato:
+
+```
+HOME=/tmp
+~/.ssh:            assente
+~/.gitconfig:      assente
+~/.netrc:          assente
+credential.helper: nessuno
+```
+
+E' voluto, ed e' la ragione per cui i due `_CUSTOM_GIT` usano `https` e non
+`ssh`. Quella scelta contiene pero' un presupposto che non era scritto da
+nessuna parte: **che l'accesso git anonimo funzioni.** Il 26 agosto
+funzionava; il 2 settembre no.
+
+#### La diagnosi, perche' il messaggio d'errore mente
+
+```
+fatal: could not read Username for 'https://github.com': No such device or address
+fatal: the remote end hung up unexpectedly
+Detected a corrupted git cache.
+```
+
+Sembrano tre cose: un repository privato, una chiave mancante, una cache
+rotta. Non e' nessuna delle tre. Con `GIT_CURL_VERBOSE=1`:
+
+```
+GET  /<repo>.git/info/refs?service=git-upload-pack   HTTP/2 200
+POST /<repo>.git/git-upload-pack                     HTTP/2 401
+```
+
+L'annuncio dei ref passa anonimo, la negoziazione no. Git riporta il 401 come
+richiesta di credenziali, e la "cache corrotta" e' solo Buildroot che ritenta
+due volte e si arrende.
+
+Tre test per inchiodarla, perche' le prime due ipotesi erano sbagliate:
+
+| test | esito | cosa esclude |
+|---|---|---|
+| `buildroot/buildroot.git` dal container | **401 uguale** | non e' il nostro repository, ne' la sua visibilita' |
+| nostro repo, `protocol.version=0` | `ls-remote` **passa**, il fetch **no** | non e' il protocollo v2: il POST c'e' in entrambe le versioni |
+| stesso comando dall'host | **funziona** | e' l'accesso anonimo |
+
+L'host ce la fa perche' ha un helper *scoped per URL* in `~/.gitconfig`:
+
+```
+credential.https://github.com.helper = !/usr/bin/gh auth git-credential
+```
+
+che un `git config --get credential.helper` non mostra — dettaglio che ha
+allungato la diagnosi.
+
+Attenzione all'effetto ottico: una build che trova i tarball gia' in `dl/`
+non se ne accorge. Il guasto si manifesta **solo alzando uno SHA**, ed e'
+esattamente cosi' che l'abbiamo trovato.
+
+#### Perche' `MIRROR=` e non un URL nel defconfig
+
+Un mirror che serve file su HTTPS evita del tutto il protocollo git, quindi
+risolve. Ma l'URL **non** sta in questo albero, per due motivi indipendenti:
+
+- un mirror e' infrastruttura di chi la paga, e questo repository e'
+  pubblico: un URL cablato significa che il traffico di sconosciuti finisce
+  sulla bolletta di qualcun altro;
+- un valore site-specific per variante e' il problema che i defconfig
+  dovrebbero evitare. `BR2_PRIMARY_SITE` e' una stringa sola.
+
+Quindi: `MIRROR=` da riga di comando, oppure in `local.mk` che e' in
+`.gitignore`. Default vuoto, comportamento invariato.
+
+Due dettagli implementativi non ovvi, entrambi a commento nel `Makefile`:
+
+`MIRROR` va passato sulla **riga di comando** di make, non nell'ambiente. Il
+`.config` di Buildroot assegna `BR2_PRIMARY_SITE` come variabile del makefile,
+e l'ambiente non sovrascrive un'assegnazione del makefile — la riga di comando
+si'. Con `-e` non avrebbe funzionato.
+
+E `-include local.mk` da solo non basta: make prova a *ricostruire* un file
+incluso che manca, la regola catch-all `%:` intercetta il nome e lo inoltra a
+Buildroot, che risponde `No rule to make target`. Serve la regola vuota
+`$(LOCAL_MK): ;`, lo stesso idioma che il `Makefile` usava gia' per se stesso.
+
+#### Il limite che questa scelta accetta
+
+| senza `MIRROR` | |
+|---|---|
+| ~80 package di terzi | scaricano da upstream, funzionano |
+| kernel e U-Boot | **falliscono** |
+
+Un clone fresco, per chi non ha un mirror ne' credenziali git, non completa
+la build. E' un limite noto e accettato: l'alternativa era pubblicare un
+mirror a spese di qualcuno, o rimettere segreti nel container. Il rimedio
+documentato e' scaricare i due tarball dall'host, che serve una volta per
+SHA.
+
+`BR2_PRIMARY_SITE_ONLY` resta la strada per build ermetiche — niente
+dipendenza da GitHub, kernel.org, gnu.org, che cadono tutti prima o poi. Con
+gli SHA pinnati come li abbiamo e' cio' che rende una release ricostruibile
+fra due anni.
+
+Ma non e' un interruttore da lasciare acceso, ed e' il motivo per cui non e'
+attivo. Con `ONLY` un tarball mancante e' errore secco, senza fallback — e
+un tarball manca **ogni volta che si alza qualcosa**: un nuovo SHA del
+kernel, una release di Buildroot che sposta le versioni dei package. Il
+flusso diventerebbe: scarica normalmente, sincronizza sul mirror, poi
+ricostruisci con `ONLY`. Tre passi dove oggi ce n'e' uno.
+
+Ha senso quindi come **modalita' per riprodurre una release**, non come
+impostazione di tutti i giorni: si accende su uno snapshot congelato e
+completo, per dimostrare che quella release si ricostruisce da sola. Lo
+sviluppo quotidiano resta con il fallback, che e' proprio la rete di
+sicurezza che `ONLY` toglie.
+
+Nota sulle dimensioni, utile per decidere: l'insieme completo dei tarball di
+questo build e' **42 file per ~1.1 GB**, di cui 720 MB sono i tre tarball del
+kernel. Non e' un mirror grande.
+
+### Quanto divergiamo da mainline, e cosa costa il salto a 7.0
+
+Il senso del percorso mainline e' capire quanto di questa board si regge su
+codice upstream, e potersi spostare dalla 6.19 alla 7.0 toccando poco. Questo
+richiede una regola su *dove* possono stare le modifiche, non solo quante
+sono.
+
+**La regola: zero patch al codice del kernel.** Oggi e' rispettata, ma va
+letta guardando il branch del kernel per intero, non solo la parte nostra.
+
+Il branch `rk3506-lyra-plus` di `rk3506-kernel-upstream.git` ha **17 commit
+sopra il tag `v6.19`**, e sono di due provenienze diverse:
+
+| provenienza | commit | cosa tocca |
+|---|---|---|
+| **Ye Zhang \<ye.zhang@rock-chips.com\>**, 2025-12-27 | 7 | tutto il codice C: `pinctrl-rockchip.c` (+282), `pinctrl-rockchip.h` (+20), `gpio-rockchip.c` (+2), i binding, i dtsi pinctrl/rmio generati (rk3506 e rv1126b) |
+| **nostri** | 9 | solo DTS/DTSI e `arch/arm/configs/rk3506_minimal.config` |
+
+I sette di Rockchip sono una serie **in volo verso upstream**, cherry-pickata
+qui: uno di essi (`gpio: rockchip: support new version GPIO`) porta gia'
+`Acked-by: Bartosz Golaszewski`, il maintainer di gpio. Questo cambia il
+segno del ragionamento sul salto di versione: quel codice non e' debito
+nostro da riportare, e' base che *arrivera'*. Quando la serie atterra, quei
+sette commit spariscono dal branch per assorbimento.
+
+Verifica dei numeri (i due file DTS non sono in `v6.19`, li introduce il
+branch):
+
+```sh
+cd ~/git/rk3506-kernel-upstream
+git log --format='%h %an %s' v6.19..HEAD
+git diff --numstat v6.19..HEAD
+git cat-file -e v6.19:arch/arm/boot/dts/rockchip/rk3506.dtsi   # fallisce
+```
+
+Restano quindi i nove nostri, e la tabella che conta e' questa:
+
+| cosa | e' divergenza? | stato |
+|---|---|---|
+| patch al **codice** del kernel (`.c`, `.S`, Kconfig) scritte da noi | si, la peggiore | **nessuna** |
+| patch portate dal framework a un sorgente di terzi | si | **nessuna al kernel** (quattro a U-Boot, solo warning gcc-13) |
+| DTSI del **SoC** (`rk3506.dtsi`) | **no**, il file e' nostro e non e' upstream | due proprieta' |
+| DTS **della nostra board** | **no**, idem | due proprieta' |
+| fragment di config (`linux-mainline.config`, `linux-mainline-flash.config`) | no | due |
+
+La distinzione che conta e' la terza e la quarta. `rk3506g-luckfox-lyra-plus.dts` **non e'
+ancora in mainline**: e' il nostro contributo in corso, nel branch
+`rk3506-lyra-plus`. Aggiungerci una proprieta' corretta non e' forkare Linux,
+e' scrivere il supporto della board. Quando la board andra' upstream, la
+proprieta' va con lei e la divergenza e' zero per costruzione.
+
+Il che vale solo se la proprieta' e' *giusta*, non un aggiramento. Per
+`linux,usable-memory-range` il precedente in-tree c'e', su una board ARMv7 e
+per lo stesso identico motivo — `arch/arm/boot/dts/airoha/en7523-evb.dts:19-21`:
+
+```dts
+/* Bootloader installs ATF here */
+/memreserve/ 0x80000000 0x200000;
+...
+	chosen {
+		linux,usable-memory-range = <0x80200000 0x1fe00000>;
+	};
+```
+
+Firmware sicuro in fondo alla RAM, `/memory` che descrive tutto, e la
+proprieta' che sposta Linux 2 MiB piu' in su. Stesso offset. Un secondo
+precedente, con il motivo scritto nel commento, e'
+`arch/arm/boot/dts/samsung/exynos4212-tab3.dtsi:53`.
+
+#### Il costo ricorrente non e' nel kernel, e' nel fragment
+
+Le tre cose che si romperanno alzando la versione del kernel, in ordine di
+probabilita':
+
+1. **La lista delle piattaforme da spegnere.** 72 simboli `ARCH_*` e 41
+   `SOC_*`. Se mainline aggiunge una famiglia di SoC, quella non e' nella
+   lista, rientra, e lo `zImage` ricresce. Non e' silenzioso: la verifica
+   dimensioni di `post-image.sh` fa **fallire la build** invece di produrre
+   un'immagine che non entra in partizione. Il comando per rigenerare le due
+   liste dai Kconfig del kernel e' nel commento del fragment.
+2. **I nomi dei simboli di config.** Upstream li rinomina e li rimuove senza
+   preavviso. `merge_config` avvisa su un simbolo ridefinito, ma **non** su un
+   simbolo che non esiste piu': quello sparisce in silenzio. Il controllo che
+   se ne accorge e' rileggere il `.config` finale, non il fragment — che e' la
+   ragione per cui la verifica del Passo 5 guarda il `.config` prodotto.
+3. **`rk3506_minimal.config` in-tree**, di cui il fragment e' una copia
+   dichiarata. Se cambia nel repo kernel, va riallineata a mano; il comando di
+   diff e' nel commento.
+
+#### Cosa NON e' stato fatto, e perche'
+
+**`rockchip,rk3506` non e' in `rockchip_board_dt_compat[]`**
+(`arch/arm/mach-rockchip/rockchip.c:54-63`), quindi la board ripiega su
+`GENERIC_DT` invece di usare il machine descriptor Rockchip. Non e' fatale —
+lo dimostra il fatto che boota, e che il kernel vendor fa lo stesso — ma
+significa che `rockchip_dt_init()` non gira e quindi nemmeno
+`rockchip_suspend_init()`. Aggiungerlo sarebbe una riga, ed e' una patch al
+**codice**, non al DTS: prima di scriverla va capito cosa
+`rockchip_suspend_init()` faccia su un SoC che non conosce. Fuori scope per un
+bring-up da console, ma e' il primo candidato quando servira' il suspend.
+
+### Il kernel non puo' stare a 0x8000: la' c'e' OP-TEE
+
+Questo e' costato l'intero bring-up, e vale la pena scriverlo per esteso
+perche' il sintomo non somiglia alla causa.
+
+Il boot si fermava dopo `Starting kernel ...` **senza stampare un solo
+carattere**: non con `earlycon`, non con `CONFIG_DEBUG_LL`, niente.
+
+#### Perche' il silenzio non diceva nulla
+
+La finestra in cui il boot ARM puo' morire muto e' prima che esista una
+console:
+
+| | |
+|---|---|
+| `setup.c:1106` | `mdesc = setup_machine_fdt(atags_vaddr);` |
+| `setup.c:1138` | `parse_early_param();` — earlycon nasce qui |
+
+e in quella finestra `early_print()` raggiunge una UART **solo** con
+`CONFIG_DEBUG_LL` (`setup.c:368-370`); altrimenti e' un `printk` in un ring
+buffer senza console, e `dump_machine_table()` finisce in `while (true);`
+(`setup.c:756-757`). Il silenzio era percio' la firma *attesa* di qualunque
+errore in quella finestra: non discriminava fra le cause.
+
+#### Due ipotesi sbagliate, per non rifarle
+
+**`rockchip,rk3506` non e' in `rockchip_board_dt_compat[]`.** Vero, e sembra
+decisivo. Non lo e': `devtree.c:196-201` definisce un `GENERIC_DT` di
+fallback e `fdt.c:763` fa `best_data = default_match`, quindi un compatible
+non riconosciuto ripiega su "Generic DT based system" invece di morire. Il
+kernel **vendor** non elenca `rk3506` e boota: ripiegano entrambi.
+
+**Il DTB viene sovrascritto dal kernel decompresso.** Plausibile — il
+bootloader lo mette a `0x63000`, appena 372 KiB sopra `0x8000` — e il
+decompressore protegge solo se stesso (`head.S:449-465`), mai il DTB passato
+in `r2`. Smentita sulla board: spostandolo con `setenv fdt_addr_r 0x02000000`
+il silenzio e' rimasto identico.
+
+#### La causa vera
+
+Non il kernel, non il DTB: l'indirizzo a cui lavora il **decompressore**.
+
+`AUTO_ZRELADDR` (obbligatorio su `ARCH_MULTIPLATFORM`) ricava l'inizio della
+RAM mascherando il PC:
+
+```
+head.S:279-280   mov r0, pc; and r0, r0, #0xf8000000   ->  0x00000000
+head.S:312       add r4, r0, #TEXT_OFFSET              ->  0x00008000
+```
+
+e `fdt_check_mem_start()` non lo corregge, perche' `memory@0` dichiara la RAM
+da 0 e quindi 0 e' un indirizzo valido (`fdt_check_mem_start.c:146-148`,
+*"Calculated address is valid, use it"*). Da li':
+
+```
+head.S:793   __setup_mmu: sub r3, r4, #16384    ->  page directory a 0x00004000
+```
+
+16 KiB di scritture da `0x4000` a `0x8000`. Quell'intervallo e' dentro
+`trust@0` (`0x0-0x62000`), la regione di **OP-TEE**, che il firewall del SoC
+rende inaccessibile dal normal world. La prova, dal prompt U-Boot — che gira
+anch'esso in normal world:
+
+```
+=> md 0x4000 4
+00004000:data abort
+pc : 00254086  lr : 00254029
+### ERROR ### Please RESET the board ###
+```
+
+Non passa nemmeno una **lettura**. Il decompressore aborta quindi alla prima
+scrittura della page directory, dentro `cache_on`, **prima** di
+`decompress_kernel()`: il suo primo `putstr()` non viene mai raggiunto, ed e'
+per questo che accendere `DEBUG_LL` non cambiava niente.
+
+Che il kernel decompresso vada *sopra* la regione riservata era scritto nella
+mappa del bootloader, `u-boot/include/configs/rk3506_common.h:58-70`:
+
+```
+ *     fdt:  396K - 524K
+ *   Image:  1M+32k - 16M
+ *  zImage:  16M - 24M
+```
+
+`kernel_addr_r=0x00108000`. Il vincolo c'era; il kernel non lo sapeva.
+
+#### La correzione
+
+`linux,usable-memory-range = <0x00200000 0x07e00000>` nel nodo `/chosen`, nel
+**repo del kernel** (`rk3506-kernel-upstream`, commit `c6c820d6`): il DTS e' di
+questa board, e la correzione va dove vive il DTS. Il framework non porta
+nessuna patch al kernel. Fa due cose:
+
+- `fdt_check_mem_start()` ritorna `round_up(base, SZ_2M)` invece del PC
+  mascherato → page directory a `0x00204000`, kernel a `0x00208000`, liberi
+  da OP-TEE (`0x62000`), DTB (`0x63000`) e ramoops (`0x83000`);
+- `early_init_dt_check_for_usable_mem_range()` (`of/fdt.c:884-916`, senza
+  guardia di config) taglia `memblock`, cosi' la regione firewallata esce
+  dalla vista del kernel e nessun accesso dalla linear map puo' abortire —
+  che chiude anche il `TODO(verify)` su `trust@0`, privo di `no-map`.
+
+Risultato:
+
+```
+# uname -a
+Linux lyra-plus 6.19.0 #2 SMP armv7l GNU/Linux
+```
+
+`SMP` non e' un dettaglio: PSCI ha `method = "smc"`, servito da OP-TEE. Se il
+kernel avesse comunque scritto su quella regione, il secondo core non
+partirebbe. E' la conferma che ora la lascia in pace.
+
+**Non costa niente.** Avevo previsto la perdita di `pstore`, assumendo che
+`memblock_cap_memory_range()` impedisse la riserva di `ramoops@83000`, che sta
+sotto il floor dei 2 MiB. Sbagliato: il cap toglie la RAM all'**allocatore**,
+non a `reserved-memory`. Il `dmesg` del primo boot riuscito lo mostra senza
+ambiguita':
+
+```
+OF: fdt: Ignoring memory range 0x0 - 0x200000
+OF: reserved mem: 0x00083000..0x000affff (180 KiB) map non-reusable ramoops@83000
+pstore: Registered ramoops as persistent store backend
+ramoops: using 0x2d000@0x83000, ecc: 0
+```
+
+**Scartata:** spedire `Image` invece di `zImage`. U-Boot carica un kernel non
+compresso direttamente a `kernel_addr_r = 0x00108000`, sopra OP-TEE, senza
+decompressore e quindi senza page directory a `0x4000`: avrebbe risolto da
+se'. Ma `Image` e' 16.61 MiB e la partizione `boot` e' 12 MiB.
+
+**Resta aperto:** perche' il kernel vendor 6.1 bootasse. Ha
+`CONFIG_AUTO_ZRELADDR=y`, il suo decompressore e' identico (stesso
+`sub r3, r4, #16384`) e la sua catena DTS non ha ne' `/memory` ne'
+`linux,usable-memory-range` — quindi dovrebbe finire nello stesso abort. Il
+log di boot vendor lo chiarirebbe; fino ad allora la domanda e' aperta, e
+vale la pena chiedersi se l'immagine vendor di questo albero sia mai stata
+avviata o se il "funziona" venisse dalle immagini dell'SDK.
+
+### I DTB dei due kernel non sono interscambiabili
+
+Questa è la trappola grossa, e non dà nessun messaggio di errore.
+
+Gli ID dei clock nei dt-bindings sono stati **rinumerati** fra il 6.1 vendor e
+mainline. Stesso file, stesse righe, valori diversi:
+
+| simbolo | vendor `rockchip,rk3506-cru.h` | mainline `rockchip,rk3506-cru.h` |
+|---|---|---|
+| `PCLK_UART0` (`:112`) | 113 | 99 |
+| `SCLK_UART0` (`:117`) | 118 | 104 |
+
+Un DTB vendor su kernel mainline (o viceversa) **compila, boota e programma i
+clock sbagliati**: gli ID sono numeri, il kernel non ha modo di accorgersi che
+vengono da un'altra numerazione. Nessun errore, solo una board che non parla —
+o che parla a un baudrate che non è quello che ci si aspetta.
+
+Conseguenza operativa: **i `boot.img` dei due percorsi non vanno mai mescolati
+sulla stessa board.** Contromisure, tutte a costo zero:
+
+- `post-image.sh` scrive `output/images/lyra-manifest.txt`: kernel, commit,
+  DTB, console, provenienza di `resource_tool`.
+- accanto a `boot.img` compare un **hard link** con il nome della release del
+  kernel — `boot-6.1.99.img` oppure `boot-6.19.0.img`. Zero byte in più, e
+  sulla scrivania i due file non si somigliano. Il nome viene da
+  `include/config/kernel.release`, scritto dal kernel stesso.
+- `/etc/issue` sul target lo dice prima del prompt di login
+  (`BR2_TARGET_GENERIC_ISSUE`), e `/etc/lyra-release` riporta il commit.
+
+### La SPI NAND su mainline, e l'`mtd-id` che nessuno fa combaciare
+
+Il rootfs su flash e' il quarto defconfig, `lyra_plus_mainline_defconfig`.
+Due cose sono andate meglio del previsto e una era una trappola.
+
+**Andata bene: il driver mainline guida l'FSPI senza una riga di modifica.**
+Il vendor tratta l'FSPI del RK3506 come un IP a se; mainline ha un solo
+driver, `spi-rockchip-sfc.c`, con un solo compatible generico
+`"rockchip,sfc"` (`drivers/spi/spi-rockchip-sfc.c:822-825`). Non c'e' nessuna
+tabella per SoC da estendere, perche' il driver legge la versione dell'IP dal
+registro `SFC_VER` (offset `0x2C`) **a runtime**, alla riga 691, e non rifiuta
+mai una versione che non conosce: la usa solo per adattare il comportamento
+(`>= SFC_VER_4`, `>= SFC_VER_8`). Quindi tutto il lavoro e' il device tree: il
+nodo `sfc@ff488000` in `rk3506.dtsi` e il figlio `flash@0` con i pinctrl
+`fspi_*` nel DTS della board.
+
+Confermato su hardware:
+
+```
+spi-nand spi0.0: Winbond SPI NAND was found.
+spi-nand spi0.0: 256 MiB, block size: 128 KiB, page size: 2048, OOB size: 128
+```
+
+Da sapere per non perdere tempo: **il driver non stampa nulla quando il probe
+riesce.** In `spi-rockchip-sfc.c` non c'e' un solo `dev_info`, solo `dev_err`
+e `dev_dbg`. L'assenza di una riga `rockchip-sfc ff488000.spi:` nel `dmesg`
+non e' un fallimento; la prova che ha funzionato e' che esiste `spi0.0`.
+
+**La trappola: le partizioni MTD non possono arrivare da U-Boot.** Non e' una
+conseguenza di `CONFIG_CMDLINE_FORCE=y` — nemmeno rilassandolo funzionerebbe.
+
+U-Boot fa la sua parte bene. Genera a runtime un `mtdparts` in byte, non nei
+settori di `parameter.txt`: `drivers/mtd/mtd_blk.c:410-426`, dove il `<< 9`
+e' la conversione. Il prefisso `mtd-id` lo prende da `desc->product`, che per
+una spi-nand e' `mtd->name` (`mtd_blk.c:716-719`), e in U-Boot vale
+`spi-nand0` (`drivers/mtd/nand/spi/core.c:1325`). Passa quindi
+`mtdparts=spi-nand0:...`.
+
+Linux accetta la definizione solo se l'`mtd-id` combacia **esattamente** con
+`mtd->name`:
+
+```c
+if ((!mtd_id) || (!strcmp(part->mtd_id, mtd_id)))
+```
+
+`drivers/mtd/parsers/cmdlinepart.c:346`, con `mtd_id = master->name` alla riga
+332. E qui le due catene si separano:
+
+| | `mtd->name` di una spi-nand | perche' |
+|---|---|---|
+| kernel **vendor** 6.1 | `spi-nand0` | patch locale Rockchip: `mtd->name = "spi-nand0"` dentro `if (IS_ENABLED(CONFIG_SPI_ROCKCHIP_SFC))`, `drivers/mtd/nand/spi/core.c:1408-1409` |
+| kernel **mainline** 6.19 | `spi0.0` | quella patch non c'e': spinand registra con `name` NULL (`core.c:1672,1678`) e mtdcore ripiega su `dev_name(parent)`, cioe' il nome del device SPI (`mtdcore.c:896-897`) |
+
+Quindi la stringa di U-Boot non combacia mai su mainline. E non combacia
+nemmeno il `CMDLINE:` di `board/lyra-plus/parameter.txt`, per due motivi
+insieme: ha l'`mtd-id` **vuoto** (`mtdparts=:...`), che non e' un jolly —
+`cmdlinepart.c:346` accetta il vuoto solo se `master->name` e' NULL, e non lo
+e' mai — e ha le size in settori. Quella riga e' il formato di Rockchip per il
+tool di flash, non una cmdline Linux.
+
+**La scelta.** Replicare la patch al `mtd->name` sarebbe esattamente la
+divergenza del vendor, e upstream non ha motivo di accettarla: il nome
+`spi0.0` e' quello giusto per mainline, e' `spi-nand0` a essere l'anomalia.
+L'alternativa mainline-idiomatica — un nodo `partitions { compatible =
+"fixed-partitions"; }` nel DTS — sposterebbe il layout dentro il repo del
+kernel, dove upstream non lo vuole e dove andrebbe riallineato a mano ogni
+volta che cambia `parameter.txt`.
+
+Il layout resta quindi dichiarato **nel framework**, nella nostra cmdline, con
+l'`mtd-id` di mainline e in byte, convertito da `parameter.txt:12` con la
+stessa aritmetica di `post-image.sh:318`:
+
+```
+mtdparts=spi0.0:0x400000@0x400000(uboot),0xc00000@0x800000(boot),-@0x2000000(rootfs)
+```
+
+|  | in `parameter.txt` (settori) | nella cmdline (byte) | |
+|---|---|---|---|
+| `uboot` | `0x00002000@0x00002000` | `0x400000@0x400000` | 4 MiB @ 4 MiB |
+| `boot` | `0x00006000@0x00004000` | `0xc00000@0x800000` | 12 MiB @ 8 MiB |
+| `rootfs` | `-@0x00010000` | `0xdf60000@0x2000000` | 1787 blocchi @ 32 MiB |
+
+#### La rootfs NON puo' essere `-`, e capirlo e' costato due kernel panic
+
+La prima versione di questa riga usava `-`, cioe' `SIZE_REMAINING`
+(`cmdlinepart.c:48,90`), con la motivazione che cosi' la taglia del chip non
+finisce cablata da nessuna parte. **E' sbagliata**, e vale la pena scrivere
+perche', perche' l'errore e' seducente: `-` significa *fino alla fine del
+**dispositivo***, mentre la partizione finisce prima.
+
+La GPT reale sulla scheda, letta con `upgrade_tool PL`:
+
+```
+NO  LBA        Size       Name
+01  0x00002000 0x00002000 uboot
+02  0x00004000 0x00006000 boot
+03  0x00010000 0x0006fbdf rootfs
+```
+
+`0x6fbdf` = 457695 settori = **1787.87 blocchi** di erase. L'ultimo LBA della
+partizione e' 523230, cioe' 1058 settori prima della fine del chip: li' c'e' la
+GPT di backup.
+
+Con `-` la nostra `mtd2` era di **1792** blocchi e comprendeva i blocchi
+1787-1791, che non appartengono alla partizione. Il tool di flash non li tocca
+— correttamente — ma UBI ci cresce dentro e ci scrive header EC. Al riflash
+successivo restano con l'*image sequence number* del giro precedente, e UBI si
+rifiuta di attaccare:
+
+```
+ubi0 error: ubi_attach: bad image sequence number 152745098 in PEB 1790, expected 1632597758
+ubi0 error: ubi_attach_mtd_dev: failed to attach mtd2, error -22
+Kernel panic - not syncing: VFS: Unable to mount root fs
+```
+
+Il PEB stantio era il **1790** in entrambe le occorrenze: fuori dai 1787 del
+vendor, dentro i nostri 1792.
+
+Il valore giusto e' quello che U-Boot calcola per la partizione con tag `grow`
+(`mtd_blk.c:449-461`):
+
+```c
+size = info.size - (info.size - 1) % (mtd->erasesize >> 9) - 1
+/* 457695 - 222 - 1 = 457472 settori = 1787 blocchi = 0xdf60000 byte */
+```
+
+Cosi' la nostra `mtd2` coincide con quella che riceve il kernel vendor.
+
+**Come e' venuto fuori.** Avevo documentato che un rootfs UBI richiede un
+`upgrade_tool ef` prima di ogni `uf`, presentandolo come una proprieta' di UBI,
+con tanto di citazione del commento di `attach.c` che dice che il controllo
+serve a *"detect situations when users flash UBI images incorrectly"*. La
+citazione era giusta e la conclusione sbagliata: l'utente ha fatto notare che
+**sul kernel vendor `uf` da solo e' sempre bastato**. Quello non tornava con la
+spiegazione, e il pezzo che non tornava era il nostro dimensionamento. Se una
+spiegazione regge solo per il nostro percorso e non per quello vendor, e i due
+condividono tool e flash, la differenza e' quasi sempre in cio' che abbiamo
+scritto noi.
+
+> **Debito noto.** Il layout e' ora dichiarato in **tre** posti — a mano.
+> `parameter.txt` (per il flash), `linux-mainline.config` e
+> `linux-mainline-flash.config` (per il kernel). Nessuno li confronta
+> automaticamente. Se `parameter.txt` cambia, le altre due vanno cambiate con
+> lui, e il sintomo di una dimenticanza e' un rootfs che monta la partizione
+> sbagliata, non un errore di build.
+
+#### Il secondo fragment, e perche' la cmdline e' duplicata
+
+`CONFIG_CMDLINE` e' un simbolo string e Kconfig non sa appendere a un valore
+esistente. Per aggiungere il `root=` va riscritto tutto, quindi
+`linux-mainline-flash.config` contiene una seconda copia della stringa. Le due
+vanno tenute allineate a mano; la parte comune e' verificabile con un `diff`.
+
+L'ordine dei fragment e' garantito: `BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES`
+finisce in `LINUX_KCONFIG_FRAGMENT_FILES` (`linux/linux.mk:377`) e da li' nella
+riga di comando di `merge_config.sh` (`package/pkg-kconfig.mk:67`, invocato con
+`-m` e **senza** `-s`). `merge_config.sh` cancella il valore precedente e
+appende il nuovo (`scripts/kconfig/merge_config.sh:153-166`), quindi vince
+l'ultimo file e stampa
+
+```
+Value of CONFIG_CMDLINE is redefined by fragment .../linux-mainline-flash.config:
+```
+
+che e' il comportamento atteso: senza `-s` non e' un errore.
+
+I tre parametri aggiunti, e da dove viene ognuno:
+
+- `ubi.mtd=rootfs` — attacca UBI alla partizione **per nome**, non per indice:
+  `ubi_mtd_param_parse` prova `simple_strtoul` e, se la stringa non e' un
+  numero, chiama `get_mtd_device_nm()` (`drivers/mtd/ubi/build.c:1216-1225`).
+  Cosi' un riordino del layout non invalida la riga.
+- `root=ubi0:rootfs` — il nome del volume e' quello che scrive `ubinize`:
+  `vol_name=rootfs` in `buildroot/fs/ubi/ubinize.cfg:5`.
+- `rootfstype=ubifs` — UBIFS non e' auto-rilevabile da un `root=`: non c'e' un
+  blockdev da cui leggere un superblocco.
+
+#### La geometria UBIFS: copiata dal vendor, e poi verificata
+
+`lyra_plus_mainline_defconfig` usa gli stessi valori di `lyra_plus_defconfig`.
+Il `dmesg` ora permette di controllarli invece di fidarsi:
+
+| simbolo | valore | corrisponde a |
+|---|---|---|
+| `BR2_TARGET_ROOTFS_UBI_PEBSIZE` | `0x20000` (default) | `block size: 128 KiB` |
+| `BR2_TARGET_ROOTFS_UBI_SUBSIZE` | `2048` | `page size: 2048` |
+| `BR2_TARGET_ROOTFS_UBIFS_MINIOSIZE` | `0x800` (default) | idem, 2048 |
+| `BR2_TARGET_ROOTFS_UBIFS_LEBSIZE` | `0x1f000` | 131072 − 2×2048 = 126976 |
+
+Il `LEBSIZE` merita una riga: sono **due** pagine di header (EC e VID) e non
+una, perche' `SUBSIZE` e' uguale a `MINIOSIZE` — non c'e' subpage in cui
+impacchettarli. Con il subpage il valore sarebbe `0x1f800`, che e' appunto il
+default di Buildroot.
+
+`BR2_TARGET_ROOTFS_UBIFS_MAXLEBCNT=8456` invece **non** corrisponde a questa
+flash: 8456 × 126976 ≈ 1 GiB, mentre la partizione e' 224 MiB. Sembra un
+valore da stringere. **Non lo e', e vale la pena spiegare perche', perche' il
+ragionamento intuitivo porta dalla parte sbagliata.**
+
+Primo: non e' solo un tetto, e' il meccanismo con cui il filesystem cresce. Al
+mount UBIFS fa
+
+```c
+c->leb_cnt = min_t(int, c->max_leb_cnt, c->vi.size);
+```
+
+(`fs/ubifs/sb.c:757-760`). L'immagine prodotta da `mkfs.ubifs` e' minuscola —
+42 LEB, quanto basta a contenere i file — e si allarga fino al volume solo
+grazie a questa riga. Quindi un `MAXLEBCNT` troppo piccolo **non da' un
+errore**: tappa il filesystem sotto la dimensione della partizione, in
+silenzio. Il mount fallisce solo nel caso opposto, `max_leb_cnt < leb_cnt` del
+superblocco (`sb.c:428-432`), che partendo da `mkfs.ubifs` non puo' capitare.
+
+Secondo: la dimensione del volume **varia da esemplare a esemplare**, perche'
+dipende da quanti PEB sono buoni. Sull'unita' provata:
+
+```
+ubi0: good PEBs: 1790, bad PEBs: 2, corrupted PEBs: 0
+ubi0: available PEBs: 0, total reserved PEBs: 1790, PEBs reserved for bad PEB handling: 38
+ubi0: volume 0 ("rootfs") re-sized from 42 to 1748 LEBs
+```
+
+Due blocchi guasti di fabbrica su 1792. Un chip senza difetti darebbe un
+volume piu' grande, e un `MAXLEBCNT` tarato su *questa* scheda tapperebbe
+quello. Un valore abbondante e' quindi la scelta corretta, non uno spreco
+tollerato.
+
+Terzo: il costo e' misurabile, ed e' quasi nullo. Volume 1748 LEB, filesystem
+1737 LEB — **11 LEB di metadati in tutto, 1.36 MiB su 224** — e la LPT resta
+nel modello piccolo:
+
+```
+UBIFS (ubi0:0): FS size: 220557312 bytes (210 MiB, 1737 LEBs), max 8456 LEBs, ...
+UBIFS (ubi0:0): media format: w4/r0 (latest is w5/r0), UUID ..., small LPT model
+```
+
+Qualunque cosa costi il valore alto sta dentro quegli 11 LEB. Stringerlo
+recupererebbe una frazione di 1.36 MiB rischiando di tappare in silenzio il
+filesystem su un altro esemplare. **Resta 8456.**
+
+Non serve invece dimensionare il volume: `vol_flags=autoresize` in
+`buildroot/fs/ubi/ubinize.cfg:7` lo fa crescere fino a riempire la partizione
+al primo attach — sono le righe `re-sized from 42 to 1748 LEBs` e `attached
+mtd2 (name "rootfs", size 224 MiB)` qui sopra.
+
+### adb su mainline: il PHY non serve, ma due cose depistano
+
+`lyra_plus_mainline_defconfig` ha `adbd`, come i due defconfig vendor. Il
+percorso e' lo stesso — `S45adb`, gadget configfs con la sola funzione
+`ffs.adb`, VID/PID `2207:0006` — ma arrivarci ha richiesto di scartare due
+diagnosi sbagliate, entrambe con sintomi che accusano il pezzo sano.
+
+#### Il PHY USB2 del RK3506 non e' in mainline, e non serve
+
+`phy-rockchip-inno-usb2.c` elenca 13 SoC e RK3506 non c'e'. E portarlo non
+sarebbe una copia di tabella: mainline accede ai registri **solo** tramite la
+regmap del GRF — `regmap_write(rphy->grf, reg + off, ...)` in
+`rk3576_usb2phy_tuning` e simili — mentre il driver vendor per questo chip
+scrive **anche** nei registri interni del PHY (`rphy->phy_base + 0x30` in
+`rk3506_usb2phy_tuning`). In mainline `phy_base` ha **zero** occorrenze nel
+file, e cosi' `clkout_ctl_phy`. Sarebbe lavoro di driver, non di dati.
+
+Il nodo `dwc2` nel DTS e' quindi dichiarato **senza `phys`**, cosa che dwc2
+accetta: se `devm_phy_get()` torna `-ENODEV` lascia `hsotg->phy` a `NULL` e il
+probe continua (`drivers/usb/dwc2/platform.c:241-252`); anche i clock sono
+`devm_clk_get_optional`. Era una scommessa — il driver vendor scrive `phy_sus`
+per svegliare il PHY, quindi a freddo poteva restare in suspend — e la
+scommessa era: un build e un flash contro il costo di scrivere un driver per
+scoprire poi che non serviva.
+
+Ha pagato:
+
+```
+dwc2 ff740000.usb: EPs: 10, dedicated fifos, 972 entries in SPRAM
+dwc2 ff740000.usb: new device is high-speed
+```
+
+`new device is high-speed` significa che l'host ha **enumerato** il device: il
+PHY esce dal reset in uno stato utilizzabile. Il percorso mainline resta a zero
+patch di codice al kernel.
+
+Il controller invece era gia' supportato: `rockchip,rk3066-usb` e' nella tabella
+di dwc2 (`drivers/usb/dwc2/params.c:316`), e tutti i clock esistono nel CRU
+mainline (`HCLK_USBOTG0`=81 e compagni, registrati da `clk-rk3506.c`). Il
+compatible del nodo si ferma di proposito alla stringa generica: `dwc2.yaml`
+enumera i compatible specifici per SoC che accetta e rk3506 non e' fra questi,
+quindi un `"rockchip,rk3506-usb"` in testa farebbe solo fallire `dtbs_check`.
+
+#### Depistaggio 1: `CONFIG_USB_ETH` si prende l'UDC
+
+Riaccendere `USB_SUPPORT` non rimette in gioco solo cio' che serve: ri-espone
+tutti i simboli USB di `multi_v7_defconfig` che il pruning teneva nascosti.
+Fra questi `CONFIG_USB_ETH`, il gadget Ethernet **legacy**: compilato dentro,
+si registra all'avvio e si lega all'unico UDC prima che lo user space possa
+dire la sua.
+
+```
+g_ether gadget.0: g_ether ready
+dwc2 ff740000.usb: bound driver g_ether
+```
+
+A quel punto `configfs-gadget` non ha piu' un UDC libero e `S45adb` non puo'
+funzionare, per quanto sia corretto. **Gadget legacy e configfs sono
+alternativi**: o l'uno o l'altro. Nella stessa passata sono spenti lo stack USB
+*host* (il DTS dichiara `dr_mode = "peripheral"` e dwc2 chiede
+`USB || USB_GADGET`, quindi non ne dipende) e Bluetooth, NFC, CAN, wireless,
+NFS, IPv6 — accesi solo perche' `multi_v7` li accende per 76 piattaforme.
+Misura: `boot.img` da 7.73 a 5.69 MiB.
+
+#### Depistaggio 2: `adbd` muore sul loopback, non su USB
+
+Questo e' il piu' insidioso, perche' **tutto cio' che si guarda per primo e'
+corretto**:
+
+```
+S45adb: adbd non ha scritto i descrittori su ep0, non lego l'UDC
+# ls /sys/class/udc/          -> ff740000.usb        (l'UDC c'e')
+# ls -l /dev/usb-ffs/adb/     -> ep0                 (functionfs e' montato)
+# ls /sys/kernel/config/usb_gadget/lyra/  -> tutto in ordine
+```
+
+E le ipotesi comode cadono una per una: il percorso che `adbd` cerca e'
+`/dev/usb-ffs/adb/ep0`, identico a quello dello script; il formato *legacy* dei
+descrittori che `adbd` del 2013 usa e' ancora accettato, e il codice di
+`f_fs.c` che lo gestisce e' **identico** fra 6.1 e 6.19.
+
+La risposta arriva solo mettendo `adbd` in primo piano. Il tracing e' compilato
+dentro (`#define ADB_TRACE 1`, `core/adb/adb.h:344`):
+
+```
+# ADB_TRACE=all adbd
+install_listener('tcp:5037','*smartsocket*')
+cannot bind 'tcp:5037'
+```
+
+`adbd` apre la sua smartsocket **prima** di guardare functionfs, con
+`socket_loopback_server()`, che fa `bind()` su `INADDR_LOOPBACK` — 127.0.0.1
+(`core/libcutils/socket_loopback_server.c`). Se `lo` e' giu' il bind fallisce e
+`adbd` esce.
+
+E `lo` era giu' per una decisione precedente di questo albero: i defconfig
+mainline avevano `# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set`, quindi nessun
+`S40network`, quindi nessun `ifup -a`. La motivazione era corretta *allora* —
+`CONFIG_NET` era spento e `S40network` avrebbe solo sporcato la console — ed e'
+scaduta nel momento in cui NET e' tornato acceso. Con `BR2_SYSTEM_DHCP` vuoto
+quel package genera un `/etc/network/interfaces` col **solo** loopback
+(`ifupdown-scripts.mk:12-18`), quindi non c'e' nessun `eth0` destinato a
+fallire.
+
+Da qui due cose: il defconfig rimette `ifupdown-scripts`, e `S45adb` tira su
+`lo` da se' se nessuno l'ha fatto — perche' un rootfs senza quel package e' una
+configurazione legittima e la distanza fra causa e sintomo qui e' troppa.
+
+> Nota su come si ABILITA `ifupdown-scripts` nel defconfig: **togliendo** la
+> riga. Il symbol e' `default y if BR2_ROOTFS_SKELETON_DEFAULT`, quindi la riga
+> `# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set` era l'override esplicito, e
+> `savedefconfig` non riscrive i valori di default. Un `git diff` che rimuove
+> una riga e accende un package sembra un errore e non lo e'.
+
+#### `CONFIG_NET` serve ad adbd due volte
+
+Nessuna delle due dipendenze e' dichiarata da nessuna parte, e si scoprono solo
+leggendo il sorgente:
+
+1. `unix_socketpair(AF_UNIX, SOCK_STREAM, 0, sv)` per ogni connessione di
+   servizio (`core/adb/sysdeps.h:470`); AF_UNIX e' compilato sotto `CONFIG_NET`.
+2. il `bind()` su 127.0.0.1:5037 di cui sopra, che richiede `lo` **attiva**,
+   non solo compilata.
+
+#### Un WARN di mainline su umount di functionfs
+
+Su `S45adb stop` compare:
+
+```
+WARNING: kernel/workqueue.c:4238 at __flush_work+0x11c/0x158, CPU#1: umount/324
+  cancel_work_sync from ffs_fs_kill_sb+0x9c/0xa8
+```
+
+Non e' nostro ed e' innocuo, ma vale la pena averlo scritto. Il `WARN` e'
+`WARN_ON(!work->func)`: `cancel_work_sync()` su un `work_struct` mai
+inizializzato. In mainline `ffs->reset_work` viene inizializzata **pigramente**,
+subito prima di essere schedulata (`f_fs.c:3764` e `3795`), mentre
+`ffs_fs_kill_sb` la cancella **sempre** (`f_fs.c:2101`). Se nessun reset e' mai
+avvenuto — mount, `adbd` esce, umount — `func` e' `NULL`.
+
+Il kernel 6.1 vendor non ha affatto quella `cancel_work_sync` in `kill_sb`: e'
+stata aggiunta a mainline dopo, senza spostare l'`INIT_WORK`. `cancel_work_sync`
+ritorna `false` e il danno finisce li'. La correzione sarebbe una riga —
+`INIT_WORK` in `ffs_data_new()` invece che al volo — ed e' un candidato pulito
+da proporre upstream. `TODO(verify):` se sia gia' segnalato in lista.

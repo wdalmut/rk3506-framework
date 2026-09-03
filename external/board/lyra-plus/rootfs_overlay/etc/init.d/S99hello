@@ -10,8 +10,16 @@
 # trascinarsi dietro una policy di avvio.
 #
 # BusyBox init esegue /etc/init.d/rcS, che chiama in ordine gli S??* con
-# argomento "start". L'output va sulla console (/dev/console = ttyFIQ0),
-# quindi il banner si vede sulla seriale durante il boot.
+# argomento "start". stdout e stderr sono quelli che init ha aperto su
+# /dev/console, e /dev/console e' la console scelta dal kernel con l'ultimo
+# `console=` del bootargs. Il banner esce quindi sulla seriale in tutti e tre
+# i defconfig, con nomi diversi ma la stessa UART0 @ 0xff0a0000:
+#
+#   percorso vendor     console=ttyFIQ0   fiq-debugger Rockchip
+#   percorso mainline   console=ttyS0     8250-dw (CONFIG_CMDLINE in
+#                                         board/lyra-plus/linux-mainline.config)
+#
+# Niente in questo script nomina una tty: non c'e' nulla da adattare.
 
 case "$1" in
 	start)

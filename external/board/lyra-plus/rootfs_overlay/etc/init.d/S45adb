@@ -10,10 +10,19 @@
 # Il binario adbd viene da Buildroot upstream (BR2_PACKAGE_ANDROID_TOOLS_ADBD),
 # non dal package android-adbd aggiunto dal vendor.
 #
-# Il kernel ha gia' tutto, dal defconfig vendor:
+# Il kernel VENDOR ha gia' tutto, dal suo defconfig:
 #     CONFIG_USB_DWC2=y  CONFIG_USB_GADGET=y  CONFIG_CONFIGFS_FS=y
 #     CONFIG_USB_CONFIGFS=y  CONFIG_USB_CONFIGFS_F_FS=y
 # e il DTS mette usb20_otg0 in dr_mode = "peripheral".
+#
+# QUESTO OVERLAY E' CONDIVISO fra i defconfig, e con
+# lyra_plus_mainline_initramfs_defconfig niente di quanto sopra e' vero:
+# linux-mainline.config spegne CONFIG_USB_SUPPORT, il dtsi minimale non ha
+# un nodo USB e BR2_PACKAGE_ANDROID_TOOLS non e' selezionato, quindi
+# /usr/bin/adbd non esiste. Lo script se ne accorge alla prima riga di
+# start() e ritorna 0: stampa una riga e non tocca niente. Non fallisce, non
+# ritarda il boot, non sporca la console con errori. Il criterio e' che
+# nessuno script dell'overlay possa rompersi in nessuno dei tre defconfig.
 #
 # ORDINE DELLE OPERAZIONI: NON E' ARBITRARIO
 # Con functionfs il demone in user space deve scrivere i descrittori su ep0
@@ -44,6 +53,20 @@ USB_PID=0x0006
 start() {
 	[ -x "$ADBD" ] || { echo "S45adb: $ADBD assente, salto"; return 0; }
 
+	# adbd apre la sua smartsocket su 127.0.0.1:5037 prima di guardare
+	# functionfs: socket_loopback_server() fa bind su INADDR_LOOPBACK
+	# (libcutils/socket_loopback_server.c). Se `lo` e' giu' il bind
+	# fallisce, adbd esce, e il sintomo e' fuorviante - ep0 esiste, l'UDC
+	# esiste, e sembra un problema di gadget:
+	#     install_listener('tcp:5037','*smartsocket*')
+	#     cannot bind 'tcp:5037'
+	# Normalmente lo tira su S40network di ifupdown-scripts. Qui c'e' una
+	# rete di sicurezza, perche' un rootfs senza quel package e' una
+	# configurazione legittima e il modo in cui si manifesta costa tempo.
+	if ! ip link show lo 2>/dev/null | grep -q "state UP\|UP,LOWER_UP"; then
+		ip link set lo up 2>/dev/null || ifconfig lo up 2>/dev/null
+	fi
+
 	UDC="$(ls /sys/class/udc/ 2>/dev/null | head -n 1)"
 	if [ -z "$UDC" ]; then
 		echo "S45adb: nessun UDC in /sys/class/udc/, gadget non configurabile"
@@ -60,8 +83,14 @@ start() {
 
 	mkdir -p "$GADGET/strings/0x409"
 	# Il seriale finisce in `adb devices`: prenderlo dal device tree
-	# distingue due board identiche sulla stessa scrivania.
-	SERIAL="$(tr -d '\0' < /proc/device-tree/serial-number 2>/dev/null)"
+	# distingue due board identiche sulla stessa scrivania. Il file non
+	# esiste su tutti i DTS - quello mainline non ha serial-number - e il
+	# test va fatto PRIMA di leggerlo: un 2>/dev/null su tr non serve,
+	# perche' l'errore di redirezione lo stampa la shell, non tr.
+	SERIAL=""
+	if [ -r /proc/device-tree/serial-number ]; then
+		SERIAL="$(tr -d '\0' < /proc/device-tree/serial-number)"
+	fi
 	echo "${SERIAL:-lyra-plus}" > "$GADGET/strings/0x409/serialnumber"
 	echo "Corley"              > "$GADGET/strings/0x409/manufacturer"
 	echo "Luckfox Lyra Plus"   > "$GADGET/strings/0x409/product"

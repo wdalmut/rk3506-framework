@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2026 Corley S.r.l.
+config BR2_PACKAGE_HOST_RK_RESOURCE_TOOL
+	bool "host resource_tool (Rockchip)"
+	help
+	  `resource_tool` di Rockchip, compilato per l'host.
+
+	  post-image.sh ne ha bisogno per produrre resource.img, che non e'
+	  opzionale: con CONFIG_ROCKCHIP_RESOURCE_IMAGE=y (attivo nel
+	  defconfig U-Boot di questa board) U-Boot prende il DTB del kernel
+	  da resource.img e NON dal nodo `fdt` del FIT.
+
+	  Serve solo ai kernel che non lo compilano da se'. Il kernel vendor
+	  6.1 lo costruisce in scripts/ perche' lo dichiara
+	  hostprogs-always-$(CONFIG_ARCH_ROCKCHIP); mainline non ha ne' la
+	  riga ne' il file. post-image.sh preferisce sempre il binario del
+	  kernel, se c'e', e ricade su questo.
+
+	  Il sorgente e' vendorizzato in
+	  package/rk-resource-tool/src/resource_tool.c: provenienza, sha256 e
+	  licenza (GPL-2.0+, Fuzhou Rockchip) in package/rk-resource-tool/README.md.
+
+	  Attivarlo non cambia il target: e' un host package.

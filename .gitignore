@@ -6,3 +6,7 @@
 
 # Output dei job di CI eseguiti in locale
 /out-*_defconfig/
+
+# Configurazione locale della macchina: tipicamente MIRROR (BR2_PRIMARY_SITE).
+# Non deve entrare in git: l'albero e' pubblico, il mirror di qualcuno no.
+/local.mk

@@ -53,6 +53,10 @@ Cosa trovi gia' funzionante:
 - accesso `adb` via USB
 - `hello-lyra`, che al boot dice se la board e' quella giusta e cosa vede
 - una variante `initramfs` per il bring-up senza dipendere dalla NAND
+- due varianti con **kernel mainline 6.19** (`ttyS0`), accanto alle due
+  vendor 6.1 e non al loro posto — una initramfs e una con il rootfs su SPI
+  NAND e `adb`: vedi
+  [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
 
 Cosa cambiare appena forkato:
 
@@ -151,9 +155,15 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     ├── patches/                  BR2_GLOBAL_PATCH_DIR (package Buildroot) — vuota
     ├── configs/
     │   ├── lyra_plus_defconfig            SPI NAND + UBIFS (produzione)
-    │   └── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
+    │   ├── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
+    │   ├── lyra_plus_mainline_defconfig   SPI NAND + UBIFS, kernel MAINLINE 6.19
+    │   └── lyra_plus_mainline_initramfs_defconfig
+    │                                      rootfs in RAM, kernel MAINLINE 6.19
     ├── board/lyra-plus/
-    │   ├── linux.config          fragment kernel (non un defconfig completo)
+    │   ├── linux.config          fragment kernel vendor 6.1
+    │   ├── linux-mainline.config fragment kernel mainline 6.19 (condiviso)
+    │   ├── linux-mainline-flash.config
+    │   │                         cmdline con root su UBIFS (solo mainline+flash)
     │   ├── uboot.config          fragment U-Boot
     │   ├── boot.its              sorgente FIT di boot.img
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
@@ -164,7 +174,10 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     │   ├── post-build.sh         ritocchi al rootfs
     │   ├── post-image.sh         **la catena di packaging Rockchip**
     │   └── rootfs_overlay/       /etc/init.d/{S45adb,S99hello}
-    └── package/hello-lyra/       applicazione Go di verifica
+    └── package/
+        ├── hello-lyra/           applicazione Go di verifica
+        └── rk-resource-tool/     resource_tool di Rockchip, host package
+                                  (sorgente vendorizzato + provenienza)
 ```
 
 Il file da guardare per primo, se una build non torna, e'
@@ -247,6 +260,138 @@ l'oggetto tree del commit vendor, quindi il contenuto e' identico bit per bit;
 lo SHA differisce perche' differiscono i parent. Si rigenerano con
 [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh).
 
+Il percorso mainline usa un terzo repository, `rk3506-kernel-upstream.git`, con
+il DTS di board e le sue correzioni; lo SHA e' nel defconfig.
+
+### `MIRROR=` — quando GitHub non serve i fetch git anonimi
+
+**Sintomo.** La build si ferma sul kernel o su U-Boot con un messaggio che
+manda fuori strada:
+
+```
+>>> linux-headers <sha> Downloading
+fatal: could not read Username for 'https://github.com': No such device or address
+fatal: the remote end hung up unexpectedly
+Detected a corrupted git cache.
+```
+
+Sembra un repository privato o una chiave SSH mancante. **Non lo e'.** GitHub
+risponde `401` a `POST /git-upload-pack` quando il client non e' autenticato, e
+git riporta quel 401 come una richiesta di credenziali. Il container non ne ha,
+per scelta: monta solo `/work`, quindi niente `~/.ssh`, niente `~/.gitconfig`,
+niente credential helper. Che l'host sia autenticato non conta — la build non
+gira sull'host.
+
+Riguarda **solo** kernel e U-Boot, che sono `BR2_*_CUSTOM_GIT`. Gli altri ~80
+package scaricano tarball via HTTPS normale e funzionano.
+
+**Rimedio: un mirror dei tarball.**
+
+```sh
+make MIRROR=https://<host>/dl lyra_plus_mainline_initramfs_defconfig
+make MIRROR=https://<host>/dl
+```
+
+Diventa `BR2_PRIMARY_SITE`: provato **prima** del sito upstream di ogni
+package, con fallback su quest'ultimo. Servendo file su HTTPS evita del tutto
+il protocollo git. Il layout atteso e' quello di `dl/` di Buildroot:
+
+```
+https://<host>/dl/linux/linux-<sha>-git4.tar.gz
+https://<host>/dl/uboot/uboot-<sha>-git4.tar.gz
+```
+
+Per non ripeterlo a ogni comando, l'URL puo' stare in `local.mk`, che e' in
+`.gitignore`:
+
+```sh
+echo 'MIRROR = https://<host>/dl' > local.mk
+```
+
+**In questo albero non c'e' nessun URL di mirror**, e non e' una dimenticanza:
+un mirror e' infrastruttura di chi lo paga, e questo repository e' pubblico.
+Chi ne ha uno lo indica con `MIRROR=`; chi non ne ha non paga il traffico di
+nessun altro.
+
+**Pubblicare un mirror**, se ne volete uno: bastano `dl/` servita su HTTPS —
+un bucket S3, un CloudFront, un nginx. Le cache di lavoro git **non** vanno
+caricate (sono checkout, non tarball, e Buildroot le ricrea: 2.4 GB dei 3.5
+totali):
+
+```sh
+cd buildroot/dl
+aws s3 cp . s3://<bucket>/dl/ --recursive \
+    --exclude "*/git/*" --exclude "*/git" \
+    --exclude "*.lock" --exclude "*/git.readme" \
+    --exclude "br-cargo-home/*"
+```
+
+Se il bucket e' public-read, l'URL e' un segreto solo per oscurita': chi lo
+scopre scarica a spese vostre. Una condizione `aws:SourceIp` nella bucket
+policy limita l'accesso alle vostre reti senza rimettere credenziali nel
+container.
+
+**Rimedio alternativo, senza mirror**: scaricare i due tarball **dall'host**,
+dove git e' autenticato, nella cache condivisa. Serve una volta per SHA.
+
+```sh
+make -C buildroot O="$PWD/out-dl" BR2_EXTERNAL="$PWD/external" \
+     lyra_plus_mainline_initramfs_defconfig
+make -C buildroot O="$PWD/out-dl" BR2_EXTERNAL="$PWD/external" \
+     linux-source uboot-source
+rm -rf out-dl
+```
+
+Serve una output dir separata: la `.config` in `output/` contiene i path del
+**container** (`/work/external/...`), e dall'host Buildroot si ferma con
+*"BR2_GLOBAL_PATCH_DIR contains nonexistent directory"*.
+
+**Verificare che un mirror funzioni davvero.** Non basta lanciare `make` con
+`MIRROR=`: se i tarball sono gia' in `dl/` non viene scaricato niente e la
+build passa senza toccare il mirror. Anche `make <pkg>-source` da solo non
+basta, perche' Buildroot vede lo `.stamp_downloaded` e salta in silenzio.
+Serve rimuovere lo stamp, e conviene farlo sul package piu' piccolo:
+
+```sh
+mv buildroot/dl/uboot/uboot-<sha>-git4.tar.gz /tmp/          # da parte, non cancellato
+rm -f output/build/uboot-*/.stamp_downloaded
+make MIRROR=https://<host>/dl uboot-source
+make uboot-dirclean                                          # OBBLIGATORIO, vedi sotto
+```
+
+> **Il `uboot-dirclean` non e' opzionale.** Togliere lo `.stamp_downloaded`
+> lascia la directory di build in uno stato incoerente: i sorgenti sono ancora
+> quelli estratti e **gia' patchati** dal giro precedente, ma per Buildroot il
+> download non e' mai avvenuto, quindi al `make` successivo ri-estrae e
+> ri-applica le patch sopra un albero che le ha gia'. Il sintomo non e' un
+> errore di patch, e' questo:
+>
+> ```
+> Error: duplicate filename '0001-common-edid-initialize-hdmi_len-to-silence-gcc-13.patch'
+> ```
+>
+> cioe' `apply-patches.sh` che trova due volte lo stesso nome nella lista.
+> Sembra un problema delle patch e non lo e'. Il `-dirclean` riporta il
+> package allo stato "da estrarre" e il giro dopo e' pulito.
+
+Nel log deve comparire il `wget` sull'URL del mirror e nessun tentativo git:
+
+```
+>>> uboot <sha> Downloading
+wget ... 'https://<host>/dl/uboot/uboot-<sha>-git4.tar.gz'
+HTTP request sent, awaiting response... 200 OK
+```
+
+Poi confronta lo sha256 con la copia messa da parte: i `-git4.tar.gz` sono
+generati da Buildroot con un `tar` riproducibile, quindi devono essere
+identici byte per byte. Se differiscono, il mirror serve una variante e i
+checksum non torneranno.
+
+> **Limite noto.** Senza mirror e senza uno dei due rimedi, un clone fresco
+> **non** completa la build: i package di terzi scaricano, kernel e U-Boot no.
+> Il perche' della diagnosi, con i test che la inchiodano, e' in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
 ---
 
 ## Build
@@ -303,6 +448,231 @@ Rootfs incorporato in `zImage` e quindi in `boot.img`: non c'e' `rootfs.img` e
 la NAND non viene toccata. Se la board arriva alla shell con questa immagine,
 NAND, UBI e partizionamento sono fuori dall'equazione — e resta da guardare
 solo il resto. E' l'immagine giusta con cui cominciare su hardware nuovo.
+
+### Variante mainline 6.19 (kernel upstream)
+
+```bash
+make lyra_plus_mainline_initramfs_defconfig
+make
+```
+
+Stessa board, stesso U-Boot, stessa catena di packaging, ma kernel **mainline
+6.19.0** invece del vendor 6.1.99. Esiste per rispondere a una domanda sola:
+quanto di questa board si regge su codice upstream? Non sostituisce i due
+defconfig vendor, che restano intatti come termine di paragone.
+
+Cosa cambia rispetto a `lyra_plus_initramfs_defconfig`:
+
+| | vendor | mainline |
+|---|---|---|
+| kernel | 6.1.99, `rk3506-kernel.git` | 6.19.0, `rk3506-kernel-upstream.git` |
+| defconfig kernel | `rk3506_luckfox` | `multi_v7` + `linux-mainline.config` |
+| DTB | `dts/rk3506g-lyra-plus-initramfs.dts` | in-tree `rockchip/rk3506g-luckfox-lyra-plus` |
+| **console** | **`ttyFIQ0`** | **`ttyS0`** |
+| bootargs | dal DTS (`/chosen`) | dal kernel (`CONFIG_CMDLINE_FORCE`) |
+| MTD, adb | presenti | assenti (bring-up da sola console) |
+| rete | presente | **assente** (`CONFIG_NET` spento) |
+| `zImage` | 8.83 MiB | 6.16 MiB |
+| `boot.img` | 10.32 MiB | **5.90 MiB** |
+| RAM disponibile | — | **116 MB** su 128 (CMA spento) |
+
+Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
+è sempre UART0 `@0xff0a0000`.
+
+> #### Perché il fragment spegne mezzo kernel
+>
+> `multi_v7_defconfig` è un defconfig **multi-piattaforma**: accende 76
+> famiglie di SoC ARMv7, e RK3506 è una di quelle. Così com'è produce uno
+> `zImage` di 15.07 MiB e un `boot.img` di 15.09 MiB, che **non entra** nella
+> partizione `boot` da 12 MiB — e la build fallisce nella verifica dimensioni
+> di `post-image.sh`, invece di darti un'immagine non flashabile.
+>
+> `linux-mainline.config` spegne quindi 72 piattaforme estranee e i
+> sottosistemi che nessun nodo del dtsi minimale reclama, arrivando a 6.16 MiB
+> di `zImage` e 6.18 MiB di `boot.img` — 5.8 MiB di margine.
+> Il pruning delle sole piattaforme non bastava: 12.11 MiB, 0.13 MiB sopra il
+> limite.
+>
+> **Conseguenza da sapere prima di usarla: questa immagine non ha rete.**
+> Si lavora dalla seriale. Come riabilitarla, e perché non si è allargata la
+> partizione invece, sono in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+> #### Il DTS dichiara quale RAM è di Linux
+>
+> Il DTS di board ha `linux,usable-memory-range = <0x00200000 0x07e00000>` in
+> `/chosen`. **Senza, la board non parte e non stampa niente** — nemmeno con
+> `earlycon`, nemmeno con `CONFIG_DEBUG_LL`.
+>
+> Con `AUTO_ZRELADDR` il decompressore mette la propria page directory a
+> `0x00004000` e il kernel a `0x00008000`, dentro la regione di OP-TEE
+> (`trust@0`, `0x0–0x62000`), che il firewall del SoC rende inaccessibile dal
+> normal world: dal prompt U-Boot anche un semplice `md 0x4000` dà *data
+> abort*. La proprietà sposta page directory e kernel a `0x00204000` /
+> `0x00208000`.
+>
+> Sta nel **repo del kernel**, non qui: il DTS è di questa board e la
+> correzione va dove vive il DTS. Il framework non porta nessuna patch al
+> kernel. La ricostruzione completa, con i riferimenti al sorgente e le due
+> ipotesi sbagliate scartate lungo la strada, è in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+> #### ⚠️ I due `boot.img` non vanno mescolati
+>
+> Gli ID dei clock nei dt-bindings RK3506 sono **rinumerati** fra il 6.1
+> vendor e mainline (`PCLK_UART0` 113 → 99, `SCLK_UART0` 118 → 104, in
+> `include/dt-bindings/clock/rockchip,rk3506-cru.h:112,117` di ciascun
+> repo). Un DTB vendor su kernel mainline, o viceversa, **compila, boota e
+> programma i clock sbagliati**: nessun errore, solo una board muta.
+>
+> Per capire a colpo d'occhio quale immagine si ha in mano:
+>
+> ```bash
+> cat output/images/lyra-manifest.txt      # kernel, commit, DTB, console
+> ls output/images/boot-*.img             # boot-6.1.99.img oppure boot-6.19.0.img
+> ```
+>
+> `boot-<release>.img` è un hard link a `boot.img` — stesso contenuto, zero
+> byte in più, nome inequivocabile. Anche `/etc/issue` sul target lo dice,
+> prima del prompt di login.
+
+Il perché di ogni differenza è in
+[docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *Il percorso
+mainline 6.19, accanto al vendor 6.1* — incluso il motivo per cui
+`resource.img` non si può togliere e `resource_tool` è stato vendorizzato.
+
+#### Con il rootfs sulla SPI NAND
+
+```bash
+make lyra_plus_mainline_defconfig
+make
+```
+
+È il controparte mainline di `lyra_plus_defconfig`: rootfs UBIFS sulla NAND
+invece che in RAM. Il diff fra i due defconfig mainline è **lo stesso** che
+separa i due vendor — rootfs UBI al posto di initramfs, `BR2_PACKAGE_MTD`,
+`host-genimage` — più una cosa in più: un secondo fragment kernel,
+`linux-mainline-flash.config`, applicato dopo quello condiviso.
+
+Il fragment in più serve per una ragione precisa, che vale la pena sapere
+prima di toccare il layout delle partizioni:
+
+> **Le partizioni MTD non possono arrivare da U-Boot su mainline.** Non è una
+> conseguenza di `CONFIG_CMDLINE_FORCE=y`: nemmeno rilassandolo funzionerebbe.
+> U-Boot genera un `mtdparts` corretto e in byte, ma con `mtd-id` `spi-nand0`,
+> perché il kernel **vendor** forza `mtd->name = "spi-nand0"` con una patch
+> locale Rockchip. Mainline non ha quella patch e il nome del device MTD
+> diventa `spi0.0`; `cmdlinepart` pretende che l'`mtd-id` combaci
+> esattamente, quindi la stringa di U-Boot viene scartata in silenzio. Anche
+> il `CMDLINE:` di `parameter.txt` non serve: ha `mtd-id` vuoto (che non è un
+> jolly) e le size in settori — è il formato per il tool di flash, non una
+> cmdline Linux.
+>
+> Il layout è quindi dichiarato **nella nostra cmdline**, con l'`mtd-id` di
+> mainline e in byte. Costo: lo stesso layout è scritto in tre posti
+> (`parameter.txt` e i due fragment) e **nessuno li confronta**. Se cambi
+> `parameter.txt`, cambia anche i due fragment. Le righe di sorgente che
+> inchiodano la diagnosi sono in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *La SPI
+> NAND su mainline, e l'`mtd-id` che nessuno fa combaciare*.
+
+La buona notizia è l'altra metà: **il driver SPI NAND di mainline guida
+l'FSPI del RK3506 senza una riga di modifica al kernel.** Un solo compatible
+generico `rockchip,sfc`, versione dell'IP letta a runtime dal registro
+`SFC_VER`, nessuna tabella per SoC da estendere. Tutto il lavoro è il device
+tree. Sull'hardware:
+
+```
+spi-nand spi0.0: Winbond SPI NAND was found.
+spi-nand spi0.0: 256 MiB, block size: 128 KiB, page size: 2048, OOB size: 128
+3 cmdlinepart partitions found on MTD device spi0.0
+```
+
+Nota per non cercare dalla parte sbagliata: **`rockchip-sfc` non compare nel
+`dmesg` nemmeno quando funziona.** Quel driver non ha un solo `dev_info`, solo
+`dev_err` e `dev_dbg`. La prova che il probe è andato è che esiste `spi0.0`.
+
+##### adb via USB
+
+`lyra_plus_mainline_defconfig` ha `adbd`, come i due defconfig vendor: stesso
+`S45adb`, stesso gadget configfs con la sola funzione `ffs.adb`, stessi
+VID/PID `2207:0006`.
+
+```
+S45adb: gadget ADB attivo su ff740000.usb (0x2207:0x0006)
+```
+
+La notizia buona è che **il PHY USB2 del RK3506 non richiede codice**. Il
+driver `phy-rockchip-inno-usb2` di mainline non conosce questo SoC, e portarlo
+non sarebbe una copia di tabella (mainline accede ai registri solo via regmap
+del GRF, il driver vendor scrive anche nei registri interni del PHY). Ma il
+nodo `dwc2` nel DTS è dichiarato **senza `phys`**, e dwc2 lo accetta —
+`devm_phy_get()` che torna `-ENODEV` lascia `hsotg->phy` a `NULL` e il probe
+continua. Sull'hardware il PHY esce dal reset già utilizzabile:
+
+```
+dwc2 ff740000.usb: EPs: 10, dedicated fifos, 972 entries in SPRAM
+dwc2 ff740000.usb: new device is high-speed
+```
+
+Due trappole incontrate arrivandoci, entrambe con sintomi che puntano nella
+direzione sbagliata:
+
+> **`CONFIG_USB_ETH` ruba l'UDC.** Riaccendendo `USB_SUPPORT` rientrano tutti i
+> simboli USB di `multi_v7`, fra cui il gadget Ethernet *legacy*: è compilato
+> dentro, si registra all'avvio e si prende l'unico UDC prima che lo user space
+> possa dire la sua (`bound driver g_ether`). A quel punto `configfs-gadget`
+> non ha più un UDC libero e `S45adb` non può funzionare per quanto sia
+> corretto. Gadget legacy e configfs sono alternativi.
+
+> **`adbd` ha bisogno che `lo` sia su.** Prima di guardare functionfs apre la
+> sua smartsocket su `127.0.0.1:5037` (`socket_loopback_server()`, bind su
+> `INADDR_LOOPBACK`). Se `lo` è giù il bind fallisce e `adbd` esce, con un
+> sintomo che accusa l'USB mentre l'USB è a posto: `ep0` esiste, l'UDC esiste,
+> e lo script dice solo *"adbd non ha scritto i descrittori"*. Il modo per
+> vederlo è `ADB_TRACE=all adbd` in primo piano — il tracing è compilato dentro
+> (`adb.h:344`). Lo tira su `S40network` di `ifupdown-scripts`, che il
+> defconfig installa; `S45adb` ha comunque una rete di sicurezza.
+>
+> Per lo stesso motivo il fragment accende `CONFIG_NET`: `adbd` lo usa due
+> volte, per `AF_UNIX` e per quel bind. Nessuna delle due dipendenze è
+> dichiarata da nessuna parte.
+
+Il boot completo, con la root montata da UBIFS:
+
+```
+ubi0: volume 0 ("rootfs") re-sized from 42 to 1748 LEBs
+ubi0: attached mtd2 (name "rootfs", size 224 MiB)
+ubi0: good PEBs: 1790, bad PEBs: 2, corrupted PEBs: 0
+UBIFS (ubi0:0): FS size: 220557312 bytes (210 MiB, 1737 LEBs), max 8456 LEBs
+VFS: Mounted root (ubifs filesystem) on device 0:13.
+```
+
+La riga `re-sized` è quella che conta: il volume UBI cresce da solo fino a
+riempire la partizione (`vol_flags=autoresize`), quindi la **dimensione del
+volume** non è cablata da nessuna parte e si adatta al numero di blocchi buoni
+del singolo esemplare. Su questo la NAND è da 256 MiB, la partizione `rootfs`
+223.4, il filesystem 210, e `df` mostra 193.8M disponibili.
+
+> La **dimensione della partizione** invece va cablata, e la prima versione
+> sbagliava. Nel `mtdparts` la rootfs è `0xdf60000` (1787 blocchi), non `-`:
+> `-` vale *fino alla fine del dispositivo*, ma la partizione finisce 1058
+> settori prima, dove sta la GPT di backup. Con `-` la `mtd2` prendeva cinque
+> blocchi che non le appartengono, UBI ci scriveva dentro, e il riflash
+> successivo andava in kernel panic perché il tool — correttamente — non li
+> cancella. Il valore è quello che U-Boot calcola per le partizioni `grow`.
+> Dettagli e come è venuto fuori in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+> `MAXLEBCNT=8456` sembra sovradimensionato (≈ 1 GiB) e la tentazione è
+> stringerlo. **Non farlo.** Un valore troppo piccolo non dà errore: tappa il
+> filesystem sotto la partizione, in silenzio — al mount UBIFS fa
+> `c->leb_cnt = min(c->max_leb_cnt, c->vi.size)`. E la dimensione del volume
+> varia da esemplare a esemplare col numero di blocchi guasti (qui 2 su 1792),
+> quindi un valore tarato su una scheda ne tapperebbe un'altra. Il costo
+> misurato del valore alto è 11 LEB di metadati in tutto, 1.36 MiB su 224.
+> Il ragionamento completo è in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
 
 ### Iterare su `hello-lyra`
 
@@ -393,6 +763,43 @@ rkdeveloptool ld
 `Vid=0x2207` `Pid=0x350f` sono quelli dichiarati dal defconfig U-Boot
 (`CONFIG_USB_GADGET_VENDOR_NUM` / `PRODUCT_NUM`).
 
+### Prima di flashare: quale immagine ho in mano?
+
+Un passo di dieci secondi che evita l'errore piu' costoso di questo albero —
+flashare il `boot.img` mainline su una board che ha il DTB vendor in NAND, o
+viceversa. Non da' errori: da' una board muta (vedi
+[Variante mainline 6.19](#variante-mainline-619-kernel-upstream)).
+
+```bash
+cat output/images/lyra-manifest.txt
+```
+
+```
+board=lyra-plus
+soc=rk3506g2
+kernel_release=6.19.0
+kernel_repo=https://github.com/wdalmut/rk3506-kernel-upstream.git
+kernel_commit=8f714b5131404d31d6964b686d7b6e7740f9dcab
+kernel_defconfig=multi_v7
+dtb=rockchip/rk3506g-luckfox-lyra-plus.dtb
+console=ttyS0
+...
+```
+
+Oppure, senza aprire niente:
+
+```bash
+ls output/images/boot-*.img
+#   boot-6.19.0.img   -> mainline, console ttyS0
+#   boot-6.1.99.img   -> vendor,   console ttyFIQ0
+```
+
+| | vendor | mainline |
+|---|---|---|
+| `boot-*.img` | `boot-6.1.99.img` | `boot-6.19.0.img` |
+| `console=` nel manifest | `ttyFIQ0` | `ttyS0` |
+| `/etc/issue` a boot | `Luckfox Lyra Plus (RK3506G2) - initramfs bring-up` | `... - mainline 6.19 initramfs bring-up` |
+
 ### Immagine unica (consigliato)
 
 ```bash
@@ -401,6 +808,64 @@ sudo rkdeveloptool db MiniLoaderAll.bin      # carica il loader in SRAM
 sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
+
+> #### Se UBI non attacca dopo un riflash
+>
+> Sintomo, sui defconfig con rootfs su flash:
+>
+> ```
+> ubi0 error: ubi_attach: bad image sequence number ... in PEB 1790, expected ...
+> Kernel panic - not syncing: VFS: Unable to mount root fs
+> ```
+>
+> Significa che sulla flash sono rimasti PEB di un'immagine precedente, con un
+> *image sequence number* diverso: `ubinize` ne sceglie uno **casuale a ogni
+> build** (`ubi-utils/ubinize.c:113`, `args.image_seq = rand()`), e UBI
+> pretende che tutti i PEB abbiano lo stesso. Il controllo esiste apposta — il
+> commento in `drivers/mtd/ubi/attach.c:1020-1024` dice che serve *"to detect
+> situations when users flash UBI images incorrectly, so that the flash has the
+> new UBI image and leftovers from the old one"*.
+>
+> **In condizioni normali non deve succedere, e `uf` da solo basta.** Se
+> succede, la causa quasi certa è che la partizione MTD dichiarata al kernel è
+> più grande di quella che il tool di flash cancella — che è esattamente il bug
+> che questo albero ha avuto finché il `mtdparts` diceva `-` per la rootfs.
+> Prima di aggirarlo, confronta:
+>
+> ```bash
+> sudo upgrade_tool PL                      # la partizione secondo la GPT
+> grep CONFIG_CMDLINE= output/build/linux-*/.config   # quella dichiarata al kernel
+> ```
+>
+> Per uscirne una volta, e solo dopo aver verificato che il layout combaci:
+>
+> ```bash
+> sudo upgrade_tool ef update.img           # EraseFlash: azzera tutto
+> sudo upgrade_tool uf update.img
+> ```
+>
+> Oppure, da una shell sulla board (per esempio dalla variante initramfs, che
+> ha gli strumenti MTD proprio per questo): `flash_erase /dev/mtd2 0 0`.
+>
+> **Quello che NON va fatto** è fissare l'image sequence number con
+> `ubinize -Q` per far combaciare i flash successivi: zittirebbe il controllo
+> lasciando sulla flash PEB del giro precedente che dichiarano di appartenere
+> al volume.
+
+#### Variante initramfs, mainline o vendor
+
+```bash
+cd output/images
+sudo rkdeveloptool db MiniLoaderAll.bin
+sudo rkdeveloptool gpt parameter.txt
+sudo rkdeveloptool wl 0x2000 uboot.img       # @ 4 MiB
+sudo rkdeveloptool wl 0x4000 boot.img        # @ 8 MiB  <- kernel + DTB + rootfs
+sudo rkdeveloptool rd
+```
+
+Poi la seriale a **1500000**: `ttyS0` per il mainline, `ttyFIQ0` per il
+vendor. La partizione `rootfs` non viene toccata, quindi passare da un
+percorso all'altro e' questione dei soli due `wl`.
 
 ### Per partizione
 
@@ -433,8 +898,8 @@ accertato — vedi [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md), sezione *Aperti*.
 
 | | |
 |---|---|
-| Device sul target | `ttyFIQ0` |
-| UART SoC | UART0, base `0xff0a0000` |
+| Device sul target | `ttyFIQ0` (kernel vendor) / `ttyS0` (kernel mainline) |
+| UART SoC | UART0, base `0xff0a0000` — la stessa nei due casi |
 | **Baudrate** | **1500000** |
 | Formato | 8N1, nessun controllo di flusso |
 
@@ -458,6 +923,21 @@ velocita' la fissa il driver, getty non deve toccarla.
 > Su quale pettine della Lyra Plus escano fisicamente quei pin non e'
 > ricavabile dall'SDK: lo script `flash.sh` parla di "UART2", ma il DTS dice
 > `serial-id = <0>`. Il baudrate e la periferica sono invece certi.
+
+Con `lyra_plus_mainline_initramfs_defconfig` il fiq-debugger non c'e':
+`CONFIG_FIQ_DEBUGGER` e' codice vendor, mai mandato upstream. La stessa UART0
+e' guidata dal driver `8250-dw` standard e si chiama **`ttyS0`**. Cambia il
+nome, non il cavo ne' il baudrate. La cmdline e' cablata nel kernel
+(`external/board/lyra-plus/linux-mainline.config`):
+
+```
+earlycon=uart8250,mmio32,0xff0a0000 console=ttyS0,1500000 clk_ignore_unused rootwait
+```
+
+`earlycon` stampa prima che il driver 8250 abbia fatto probe, quindi prima che
+servano clock e pinctrl: se non escono nemmeno quelle righe, il problema e'
+prima del kernel. `CONFIG_CMDLINE_FORCE=y` ignora quello che passa U-Boot, cosi'
+in bring-up la cmdline non e' fra i sospetti.
 
 ---
 

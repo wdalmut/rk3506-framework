@@ -43,6 +43,31 @@ TOPDIR="$(cd "$BOARD_DIR/../../.." && pwd)"
 # default e' relativo e punta al submodule 'vendor'.
 abspath() { case "$1" in ""|/*) printf '%s' "$1";; *) printf '%s' "$TOPDIR/$1";; esac; }
 
+# Directory di build di un package, per nome.
+#
+# Non basta `find -name 'linux-*' | head -1`: cambiando defconfig nello
+# stesso output/ i vecchi alberi restano, e con due kernel diversi (vendor
+# 6.1 e mainline 6.19, che hanno SHA diversi e quindi directory diverse)
+# `head -1` prenderebbe quello sbagliato in modo non deterministico —
+# producendo un boot.img con il DTB di un kernel e lo zImage dell'altro.
+# I due DTB NON sono interscambiabili: gli ID clock dei dt-bindings sono
+# rinumerati fra 6.1 vendor e mainline, quindi l'errore sarebbe silenzioso.
+#
+# Con BR2_*_CUSTOM_GIT il nome della directory e' "<pkg>-<REPO_VERSION>",
+# quindi il .config dice esattamente quale prendere. Il find resta come
+# ripiego per le configurazioni non-git (tarball, versione upstream).
+pkgdir() {
+	local pkg="$1" ver_symbol="$2" ver dir
+	ver="$(cfg "$ver_symbol")"
+	if [ -n "$ver" ] && [ -d "$BUILD_DIR/$pkg-$ver" ]; then
+		printf '%s' "$BUILD_DIR/$pkg-$ver"
+		return
+	fi
+	dir="$(find "$BUILD_DIR" -maxdepth 1 -type d \
+		-name "$pkg-*" ! -name "$pkg-headers*" | sort | head -1)"
+	printf '%s' "$dir"
+}
+
 RKBIN_DIR="$(abspath "$(cfg BR2_LYRA_RKBIN_DIR)")"
 PACKTOOL_DIR="$(abspath "$(cfg BR2_LYRA_PACKTOOL_DIR)")"
 
@@ -53,8 +78,13 @@ TARGET_CC="$(ls "$HOST_DIR"/bin/*-linux-*-gcc 2>/dev/null | head -1)"
 [ -n "$TARGET_CC" ] || die "toolchain target non trovata in $HOST_DIR/bin"
 TARGET_CROSS="${TARGET_CC%gcc}"
 
-# Nome del DTB: in-tree per lyra_plus_defconfig, custom per la variante
-# initramfs. Uno solo dei due e' impostato.
+# Nome del DTB. Uno solo dei due simboli e' impostato:
+#   lyra_plus_defconfig                       in-tree, "rk3506g-luckfox-lyra-plus"
+#   lyra_plus_initramfs_defconfig             custom,  dts/rk3506g-lyra-plus-initramfs.dts
+#   lyra_plus_mainline_initramfs_defconfig    in-tree, "rockchip/rk3506g-luckfox-lyra-plus"
+# Il terzo ha lo slash: in mainline i DTS rockchip stanno in una
+# sottodirectory. Funziona senza casi speciali perche' il nome viene
+# concatenato a "arch/arm/boot/dts/" piu' sotto.
 DTB_NAME="$(cfg BR2_LINUX_KERNEL_INTREE_DTS_NAME)"
 if [ -z "$DTB_NAME" ]; then
 	CUSTOM_DTS="$(cfg BR2_LINUX_KERNEL_CUSTOM_DTS_PATH)"
@@ -98,7 +128,7 @@ fi
 # ---------------------------------------------------------------------------
 # u-boot/make.sh vuole rkbin come directory FRATELLO: prepare() controlla
 # `-d ../rkbin` e aborta con "ERROR: No ../rkbin repository" (make.sh:105).
-UBOOT_DIR="$(find "$BUILD_DIR" -maxdepth 1 -type d -name 'uboot-*' | head -1)"
+UBOOT_DIR="$(pkgdir uboot BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
 [ -n "$UBOOT_DIR" ] || die "directory di build di U-Boot non trovata sotto $BUILD_DIR"
 
 # Serve una COPIA, non un symlink: la catena vendor scrive dentro rkbin.
@@ -166,12 +196,46 @@ install -m 0644 "$UBOOT_DIR/uboot.img" "$BINARIES_DIR/uboot.img"
 # ---------------------------------------------------------------------------
 # 2. resource.img
 # ---------------------------------------------------------------------------
-LINUX_DIR="$(find "$BUILD_DIR" -maxdepth 1 -type d -name 'linux-*' ! -name 'linux-headers*' | head -1)"
+LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 [ -n "$LINUX_DIR" ] || die "directory di build del kernel non trovata sotto $BUILD_DIR"
 
+# resource_tool: due provenienze, in quest'ordine.
+#
+#  1. $LINUX_DIR/scripts/resource_tool — il kernel VENDOR 6.1 lo compila da
+#     se', perche' scripts/Makefile:9 lo dichiara
+#     hostprogs-always-$(CONFIG_ARCH_ROCKCHIP). Percorso storico, resta il
+#     preferito: se il kernel lo ha, si usa il suo.
+#  2. $HOST_DIR/bin/resource_tool — host package rk-resource-tool
+#     (BR2_PACKAGE_HOST_RK_RESOURCE_TOOL). Serve al kernel MAINLINE, che non
+#     ha ne' la riga di Makefile ne' il file: scripts/resource_tool.c non e'
+#     mai stato mandato upstream.
+#
+# resource.img non e' opzionale, e non e' "solo per i logo": U-Boot legge il
+# DTB del kernel da la'. Con CONFIG_ROCKCHIP_RESOURCE_IMAGE=y (attivo in
+# questo build) il ramo che leggerebbe il DTB dal nodo `fdt` del FIT e'
+# compilato via:
+#     arch/arm/mach-rockchip/boot_rkimg.c:517
+#       #if defined(CONFIG_ROCKCHIP_FIT_IMAGE) && !defined(CONFIG_ROCKCHIP_RESOURCE_IMAGE)
+# Senza il nodo `multi`, fit_image_init_resource() ritorna -EINVAL
+# (fit.c:453-455) e il boot muore con "No valid DTB" (boot_rkimg.c:536).
 RESOURCE_TOOL="$LINUX_DIR/scripts/resource_tool"
-[ -x "$RESOURCE_TOOL" ] || die "scripts/resource_tool non compilato in $LINUX_DIR
-    (e' hostprogs-always-\$(CONFIG_ARCH_ROCKCHIP): il kernel non e' quello vendor?)"
+RESOURCE_TOOL_FROM="kernel ($LINUX_DIR/scripts)"
+if [ ! -x "$RESOURCE_TOOL" ]; then
+	RESOURCE_TOOL="$HOST_DIR/bin/resource_tool"
+	RESOURCE_TOOL_FROM="host package rk-resource-tool"
+fi
+[ -x "$RESOURCE_TOOL" ] || die "resource_tool non trovato, ne' nel kernel ne' fra gli host tool.
+    Cercato in:
+      $LINUX_DIR/scripts/resource_tool
+          c'e' solo con il kernel vendor 6.1, che lo dichiara
+          hostprogs-always-\$(CONFIG_ARCH_ROCKCHIP) in scripts/Makefile:9
+      $HOST_DIR/bin/resource_tool
+          lo installa l'host package rk-resource-tool
+    Con un kernel mainline serve il secondo: abilita
+    BR2_PACKAGE_HOST_RK_RESOURCE_TOOL=y nel defconfig.
+    Non e' aggirabile togliendo il nodo 'resource' da boot.its: con
+    CONFIG_ROCKCHIP_RESOURCE_IMAGE=y U-Boot prende il DTB del kernel da
+    resource.img (boot_rkimg.c:497 e :517)."
 
 DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 [ -f "$DTB" ] || die "DTB non trovato: $DTB"
@@ -179,7 +243,7 @@ DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 WORK="$BUILD_DIR/lyra-plus-image"
 rm -rf "$WORK"; mkdir -p "$WORK"
 
-msg "resource.img (dtb: ${DTB_NAME}.dtb)"
+msg "resource.img (dtb: ${DTB_NAME}.dtb, resource_tool: $RESOURCE_TOOL_FROM)"
 (
 	cd "$WORK"
 	# resource_tool scrive resource.img nella cwd. I logo sono opzionali:
@@ -226,6 +290,12 @@ else
 	[ -f "$BINARIES_DIR/rootfs.ubi" ] || die "rootfs.ubi non prodotto da Buildroot"
 	# Rockchip si aspetta rootfs.img; Buildroot produce rootfs.ubi.
 	cp -f "$BINARIES_DIR/rootfs.ubi" "$BINARIES_DIR/rootfs.img"
+	# Simmetrico al ramo sopra: passando da un defconfig initramfs a uno con
+	# rootfs su flash, Buildroot non ricostruisce rootfs.cpio ma nemmeno lo
+	# cancella, e resta in images/ con la data del build precedente. Nessuno
+	# lo usa - boot.img qui non lo incorpora - ma un artefatto stantio in
+	# images/ e' una trappola: sembra parte di questo build e non lo e'.
+	rm -f "$BINARIES_DIR/rootfs.cpio"
 fi
 
 # Controllo che l'SDK fa in mk-firmware.sh:52-64: ogni immagine deve entrare
@@ -324,11 +394,56 @@ if [ "$INITRAMFS" = 0 ] && [ -x "$HOST_DIR/bin/genimage" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 7. Identita' dell'immagine
+# ---------------------------------------------------------------------------
+# I DTB di questa board NON sono interscambiabili fra kernel vendor 6.1 e
+# kernel mainline: gli ID dei clock nei dt-bindings sono rinumerati (in
+# mainline SCLK_UART0=104 e PCLK_UART0=99). Un boot.img "dell'altro" kernel
+# compila, boota e programma i clock sbagliati: nessun errore, solo una
+# board che non parla.
+#
+# Da qui due contromisure, entrambe a costo zero:
+#
+#   - lyra-manifest.txt: cosa c'e' dentro, in chiaro.
+#   - boot-<kernel release>.img: un HARD LINK a boot.img, cioe' zero byte
+#     in piu'. boot.img resta al suo posto per i comandi di flash, ma sulla
+#     scrivania i due file hanno nomi diversi:
+#         boot-6.1.99.img   percorso vendor
+#         boot-6.19.0.img   percorso mainline
+#     Il nome non e' inventato: viene da include/config/kernel.release,
+#     scritto dal kernel stesso.
+KERNEL_RELEASE="unknown"
+[ -r "$LINUX_DIR/include/config/kernel.release" ] &&
+	KERNEL_RELEASE="$(tr -d '\n' < "$LINUX_DIR/include/config/kernel.release")"
+
+{
+	echo "board=lyra-plus"
+	echo "soc=rk3506g2"
+	echo "kernel_release=$KERNEL_RELEASE"
+	echo "kernel_repo=$(cfg BR2_LINUX_KERNEL_CUSTOM_REPO_URL)"
+	echo "kernel_commit=$(cfg BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
+	echo "kernel_defconfig=$(cfg BR2_LINUX_KERNEL_DEFCONFIG)"
+	echo "dtb=$DTB_NAME.dtb"
+	echo "console=$(cfg BR2_TARGET_GENERIC_GETTY_PORT)"
+	echo "resource_tool=$RESOURCE_TOOL_FROM"
+	echo "uboot_commit=$(cfg BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
+	echo "initramfs=$INITRAMFS"
+} > "$BINARIES_DIR/lyra-manifest.txt"
+
+# Ripulisce i nomi di una build precedente con un kernel diverso, che
+# altrimenti resterebbero in giro a confondere.
+find "$BINARIES_DIR" -maxdepth 1 -name 'boot-*.img' -delete
+ln -f "$BINARIES_DIR/boot.img" "$BINARIES_DIR/boot-$KERNEL_RELEASE.img"
+
+# ---------------------------------------------------------------------------
 msg "artefatti in $BINARIES_DIR"
-for f in MiniLoaderAll.bin uboot.img boot.img rootfs.img update.img flash.img; do
+for f in MiniLoaderAll.bin uboot.img boot.img "boot-$KERNEL_RELEASE.img" \
+         rootfs.img update.img flash.img; do
 	[ -f "$BINARIES_DIR/$f" ] || continue
-	printf '    %-20s %12d B  magic=%s\n' \
+	printf '    %-24s %12d B  magic=%s\n' \
 		"$f" "$(stat -c%s "$BINARIES_DIR/$f")" \
 		"$(hexdump -n 4 -e '4/1 "%02x "' "$BINARIES_DIR/$f")"
 done
+echo
+sed 's/^/    /' "$BINARIES_DIR/lyra-manifest.txt"
 echo

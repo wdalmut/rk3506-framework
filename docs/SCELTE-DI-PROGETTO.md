@@ -1014,14 +1014,52 @@ impacchettarli. Con il subpage il valore sarebbe `0x1f800`, che e' appunto il
 default di Buildroot.
 
 `BR2_TARGET_ROOTFS_UBIFS_MAXLEBCNT=8456` invece **non** corrisponde a questa
-flash: 8456 × 126976 ≈ 1 GiB, mentre la partizione e' 224 MiB, cioe' ~1850
-LEB. E' un valore del vendor sovradimensionato. Non e' un bug — e' un
-*massimo*, e UBIFS rifiuta il mount solo nel caso opposto (`max_leb_cnt <
-leb_cnt`) — ma costa spazio nella LPT. `TODO(verify):` tararlo su una misura,
-non su una stima. E' lasciato identico al vendor di proposito: cambiarlo
-introdurrebbe una differenza dal percorso provato senza avere un dato che dica
-che e' meglio.
+flash: 8456 × 126976 ≈ 1 GiB, mentre la partizione e' 224 MiB. Sembra un
+valore da stringere. **Non lo e', e vale la pena spiegare perche', perche' il
+ragionamento intuitivo porta dalla parte sbagliata.**
+
+Primo: non e' solo un tetto, e' il meccanismo con cui il filesystem cresce. Al
+mount UBIFS fa
+
+```c
+c->leb_cnt = min_t(int, c->max_leb_cnt, c->vi.size);
+```
+
+(`fs/ubifs/sb.c:757-760`). L'immagine prodotta da `mkfs.ubifs` e' minuscola —
+42 LEB, quanto basta a contenere i file — e si allarga fino al volume solo
+grazie a questa riga. Quindi un `MAXLEBCNT` troppo piccolo **non da' un
+errore**: tappa il filesystem sotto la dimensione della partizione, in
+silenzio. Il mount fallisce solo nel caso opposto, `max_leb_cnt < leb_cnt` del
+superblocco (`sb.c:428-432`), che partendo da `mkfs.ubifs` non puo' capitare.
+
+Secondo: la dimensione del volume **varia da esemplare a esemplare**, perche'
+dipende da quanti PEB sono buoni. Sull'unita' provata:
+
+```
+ubi0: good PEBs: 1790, bad PEBs: 2, corrupted PEBs: 0
+ubi0: available PEBs: 0, total reserved PEBs: 1790, PEBs reserved for bad PEB handling: 38
+ubi0: volume 0 ("rootfs") re-sized from 42 to 1748 LEBs
+```
+
+Due blocchi guasti di fabbrica su 1792. Un chip senza difetti darebbe un
+volume piu' grande, e un `MAXLEBCNT` tarato su *questa* scheda tapperebbe
+quello. Un valore abbondante e' quindi la scelta corretta, non uno spreco
+tollerato.
+
+Terzo: il costo e' misurabile, ed e' quasi nullo. Volume 1748 LEB, filesystem
+1737 LEB — **11 LEB di metadati in tutto, 1.36 MiB su 224** — e la LPT resta
+nel modello piccolo:
+
+```
+UBIFS (ubi0:0): FS size: 220557312 bytes (210 MiB, 1737 LEBs), max 8456 LEBs, ...
+UBIFS (ubi0:0): media format: w4/r0 (latest is w5/r0), UUID ..., small LPT model
+```
+
+Qualunque cosa costi il valore alto sta dentro quegli 11 LEB. Stringerlo
+recupererebbe una frazione di 1.36 MiB rischiando di tappare in silenzio il
+filesystem su un altro esemplare. **Resta 8456.**
 
 Non serve invece dimensionare il volume: `vol_flags=autoresize` in
 `buildroot/fs/ubi/ubinize.cfg:7` lo fa crescere fino a riempire la partizione
-al primo attach.
+al primo attach — sono le righe `re-sized from 42 to 1748 LEBs` e `attached
+mtd2 (name "rootfs", size 224 MiB)` qui sopra.

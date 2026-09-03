@@ -591,6 +591,32 @@ Nota per non cercare dalla parte sbagliata: **`rockchip-sfc` non compare nel
 `dmesg` nemmeno quando funziona.** Quel driver non ha un solo `dev_info`, solo
 `dev_err` e `dev_dbg`. La prova che il probe è andato è che esiste `spi0.0`.
 
+Il boot completo, con la root montata da UBIFS:
+
+```
+ubi0: volume 0 ("rootfs") re-sized from 42 to 1748 LEBs
+ubi0: attached mtd2 (name "rootfs", size 224 MiB)
+ubi0: good PEBs: 1790, bad PEBs: 2, corrupted PEBs: 0
+UBIFS (ubi0:0): FS size: 220557312 bytes (210 MiB, 1737 LEBs), max 8456 LEBs
+VFS: Mounted root (ubifs filesystem) on device 0:13.
+```
+
+La riga `re-sized` è quella che conta: il volume UBI cresce da solo fino a
+riempire la partizione (`vol_flags=autoresize`), quindi **la dimensione del
+chip non è cablata da nessuna parte** — né nel defconfig, né nella cmdline,
+né nel DTS. Su questo esemplare la NAND è da 256 MiB, la partizione `rootfs`
+224, il filesystem 210, e `df` mostra 193.8M disponibili.
+
+> `MAXLEBCNT=8456` sembra sovradimensionato (≈ 1 GiB) e la tentazione è
+> stringerlo. **Non farlo.** Un valore troppo piccolo non dà errore: tappa il
+> filesystem sotto la partizione, in silenzio — al mount UBIFS fa
+> `c->leb_cnt = min(c->max_leb_cnt, c->vi.size)`. E la dimensione del volume
+> varia da esemplare a esemplare col numero di blocchi guasti (qui 2 su 1792),
+> quindi un valore tarato su una scheda ne tapperebbe un'altra. Il costo
+> misurato del valore alto è 11 LEB di metadati in tutto, 1.36 MiB su 224.
+> Il ragionamento completo è in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
 ### Iterare su `hello-lyra`
 
 **`make` da solo non ricostruisce `hello-lyra` quando ne cambi il sorgente.**

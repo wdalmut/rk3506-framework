@@ -951,12 +951,64 @@ mtdparts=spi0.0:0x400000@0x400000(uboot),0xc00000@0x800000(boot),-@0x2000000(roo
 |---|---|---|---|
 | `uboot` | `0x00002000@0x00002000` | `0x400000@0x400000` | 4 MiB @ 4 MiB |
 | `boot` | `0x00006000@0x00004000` | `0xc00000@0x800000` | 12 MiB @ 8 MiB |
-| `rootfs` | `-@0x00010000` | `-@0x2000000` | grow @ 32 MiB |
+| `rootfs` | `-@0x00010000` | `0xdf60000@0x2000000` | 1787 blocchi @ 32 MiB |
 
-La size della rootfs resta `-`, cioe' `SIZE_REMAINING` (`cmdlinepart.c:48,90`),
-cosi' cresce fino alla fine del chip come fa `rootfs:grow` per il tool di
-flash. Sull'esemplare provato la NAND e' da 256 MiB e la partizione risulta di
-224, senza che la taglia del chip sia cablata da nessuna parte.
+#### La rootfs NON puo' essere `-`, e capirlo e' costato due kernel panic
+
+La prima versione di questa riga usava `-`, cioe' `SIZE_REMAINING`
+(`cmdlinepart.c:48,90`), con la motivazione che cosi' la taglia del chip non
+finisce cablata da nessuna parte. **E' sbagliata**, e vale la pena scrivere
+perche', perche' l'errore e' seducente: `-` significa *fino alla fine del
+**dispositivo***, mentre la partizione finisce prima.
+
+La GPT reale sulla scheda, letta con `upgrade_tool PL`:
+
+```
+NO  LBA        Size       Name
+01  0x00002000 0x00002000 uboot
+02  0x00004000 0x00006000 boot
+03  0x00010000 0x0006fbdf rootfs
+```
+
+`0x6fbdf` = 457695 settori = **1787.87 blocchi** di erase. L'ultimo LBA della
+partizione e' 523230, cioe' 1058 settori prima della fine del chip: li' c'e' la
+GPT di backup.
+
+Con `-` la nostra `mtd2` era di **1792** blocchi e comprendeva i blocchi
+1787-1791, che non appartengono alla partizione. Il tool di flash non li tocca
+— correttamente — ma UBI ci cresce dentro e ci scrive header EC. Al riflash
+successivo restano con l'*image sequence number* del giro precedente, e UBI si
+rifiuta di attaccare:
+
+```
+ubi0 error: ubi_attach: bad image sequence number 152745098 in PEB 1790, expected 1632597758
+ubi0 error: ubi_attach_mtd_dev: failed to attach mtd2, error -22
+Kernel panic - not syncing: VFS: Unable to mount root fs
+```
+
+Il PEB stantio era il **1790** in entrambe le occorrenze: fuori dai 1787 del
+vendor, dentro i nostri 1792.
+
+Il valore giusto e' quello che U-Boot calcola per la partizione con tag `grow`
+(`mtd_blk.c:449-461`):
+
+```c
+size = info.size - (info.size - 1) % (mtd->erasesize >> 9) - 1
+/* 457695 - 222 - 1 = 457472 settori = 1787 blocchi = 0xdf60000 byte */
+```
+
+Cosi' la nostra `mtd2` coincide con quella che riceve il kernel vendor.
+
+**Come e' venuto fuori.** Avevo documentato che un rootfs UBI richiede un
+`upgrade_tool ef` prima di ogni `uf`, presentandolo come una proprieta' di UBI,
+con tanto di citazione del commento di `attach.c` che dice che il controllo
+serve a *"detect situations when users flash UBI images incorrectly"*. La
+citazione era giusta e la conclusione sbagliata: l'utente ha fatto notare che
+**sul kernel vendor `uf` da solo e' sempre bastato**. Quello non tornava con la
+spiegazione, e il pezzo che non tornava era il nostro dimensionamento. Se una
+spiegazione regge solo per il nostro percorso e non per quello vendor, e i due
+condividono tool e flash, la differenza e' quasi sempre in cio' che abbiamo
+scritto noi.
 
 > **Debito noto.** Il layout e' ora dichiarato in **tre** posti — a mano.
 > `parameter.txt` (per il flash), `linux-mainline.config` e
@@ -1063,3 +1115,149 @@ Non serve invece dimensionare il volume: `vol_flags=autoresize` in
 `buildroot/fs/ubi/ubinize.cfg:7` lo fa crescere fino a riempire la partizione
 al primo attach — sono le righe `re-sized from 42 to 1748 LEBs` e `attached
 mtd2 (name "rootfs", size 224 MiB)` qui sopra.
+
+### adb su mainline: il PHY non serve, ma due cose depistano
+
+`lyra_plus_mainline_defconfig` ha `adbd`, come i due defconfig vendor. Il
+percorso e' lo stesso — `S45adb`, gadget configfs con la sola funzione
+`ffs.adb`, VID/PID `2207:0006` — ma arrivarci ha richiesto di scartare due
+diagnosi sbagliate, entrambe con sintomi che accusano il pezzo sano.
+
+#### Il PHY USB2 del RK3506 non e' in mainline, e non serve
+
+`phy-rockchip-inno-usb2.c` elenca 13 SoC e RK3506 non c'e'. E portarlo non
+sarebbe una copia di tabella: mainline accede ai registri **solo** tramite la
+regmap del GRF — `regmap_write(rphy->grf, reg + off, ...)` in
+`rk3576_usb2phy_tuning` e simili — mentre il driver vendor per questo chip
+scrive **anche** nei registri interni del PHY (`rphy->phy_base + 0x30` in
+`rk3506_usb2phy_tuning`). In mainline `phy_base` ha **zero** occorrenze nel
+file, e cosi' `clkout_ctl_phy`. Sarebbe lavoro di driver, non di dati.
+
+Il nodo `dwc2` nel DTS e' quindi dichiarato **senza `phys`**, cosa che dwc2
+accetta: se `devm_phy_get()` torna `-ENODEV` lascia `hsotg->phy` a `NULL` e il
+probe continua (`drivers/usb/dwc2/platform.c:241-252`); anche i clock sono
+`devm_clk_get_optional`. Era una scommessa — il driver vendor scrive `phy_sus`
+per svegliare il PHY, quindi a freddo poteva restare in suspend — e la
+scommessa era: un build e un flash contro il costo di scrivere un driver per
+scoprire poi che non serviva.
+
+Ha pagato:
+
+```
+dwc2 ff740000.usb: EPs: 10, dedicated fifos, 972 entries in SPRAM
+dwc2 ff740000.usb: new device is high-speed
+```
+
+`new device is high-speed` significa che l'host ha **enumerato** il device: il
+PHY esce dal reset in uno stato utilizzabile. Il percorso mainline resta a zero
+patch di codice al kernel.
+
+Il controller invece era gia' supportato: `rockchip,rk3066-usb` e' nella tabella
+di dwc2 (`drivers/usb/dwc2/params.c:316`), e tutti i clock esistono nel CRU
+mainline (`HCLK_USBOTG0`=81 e compagni, registrati da `clk-rk3506.c`). Il
+compatible del nodo si ferma di proposito alla stringa generica: `dwc2.yaml`
+enumera i compatible specifici per SoC che accetta e rk3506 non e' fra questi,
+quindi un `"rockchip,rk3506-usb"` in testa farebbe solo fallire `dtbs_check`.
+
+#### Depistaggio 1: `CONFIG_USB_ETH` si prende l'UDC
+
+Riaccendere `USB_SUPPORT` non rimette in gioco solo cio' che serve: ri-espone
+tutti i simboli USB di `multi_v7_defconfig` che il pruning teneva nascosti.
+Fra questi `CONFIG_USB_ETH`, il gadget Ethernet **legacy**: compilato dentro,
+si registra all'avvio e si lega all'unico UDC prima che lo user space possa
+dire la sua.
+
+```
+g_ether gadget.0: g_ether ready
+dwc2 ff740000.usb: bound driver g_ether
+```
+
+A quel punto `configfs-gadget` non ha piu' un UDC libero e `S45adb` non puo'
+funzionare, per quanto sia corretto. **Gadget legacy e configfs sono
+alternativi**: o l'uno o l'altro. Nella stessa passata sono spenti lo stack USB
+*host* (il DTS dichiara `dr_mode = "peripheral"` e dwc2 chiede
+`USB || USB_GADGET`, quindi non ne dipende) e Bluetooth, NFC, CAN, wireless,
+NFS, IPv6 — accesi solo perche' `multi_v7` li accende per 76 piattaforme.
+Misura: `boot.img` da 7.73 a 5.69 MiB.
+
+#### Depistaggio 2: `adbd` muore sul loopback, non su USB
+
+Questo e' il piu' insidioso, perche' **tutto cio' che si guarda per primo e'
+corretto**:
+
+```
+S45adb: adbd non ha scritto i descrittori su ep0, non lego l'UDC
+# ls /sys/class/udc/          -> ff740000.usb        (l'UDC c'e')
+# ls -l /dev/usb-ffs/adb/     -> ep0                 (functionfs e' montato)
+# ls /sys/kernel/config/usb_gadget/lyra/  -> tutto in ordine
+```
+
+E le ipotesi comode cadono una per una: il percorso che `adbd` cerca e'
+`/dev/usb-ffs/adb/ep0`, identico a quello dello script; il formato *legacy* dei
+descrittori che `adbd` del 2013 usa e' ancora accettato, e il codice di
+`f_fs.c` che lo gestisce e' **identico** fra 6.1 e 6.19.
+
+La risposta arriva solo mettendo `adbd` in primo piano. Il tracing e' compilato
+dentro (`#define ADB_TRACE 1`, `core/adb/adb.h:344`):
+
+```
+# ADB_TRACE=all adbd
+install_listener('tcp:5037','*smartsocket*')
+cannot bind 'tcp:5037'
+```
+
+`adbd` apre la sua smartsocket **prima** di guardare functionfs, con
+`socket_loopback_server()`, che fa `bind()` su `INADDR_LOOPBACK` — 127.0.0.1
+(`core/libcutils/socket_loopback_server.c`). Se `lo` e' giu' il bind fallisce e
+`adbd` esce.
+
+E `lo` era giu' per una decisione precedente di questo albero: i defconfig
+mainline avevano `# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set`, quindi nessun
+`S40network`, quindi nessun `ifup -a`. La motivazione era corretta *allora* —
+`CONFIG_NET` era spento e `S40network` avrebbe solo sporcato la console — ed e'
+scaduta nel momento in cui NET e' tornato acceso. Con `BR2_SYSTEM_DHCP` vuoto
+quel package genera un `/etc/network/interfaces` col **solo** loopback
+(`ifupdown-scripts.mk:12-18`), quindi non c'e' nessun `eth0` destinato a
+fallire.
+
+Da qui due cose: il defconfig rimette `ifupdown-scripts`, e `S45adb` tira su
+`lo` da se' se nessuno l'ha fatto — perche' un rootfs senza quel package e' una
+configurazione legittima e la distanza fra causa e sintomo qui e' troppa.
+
+> Nota su come si ABILITA `ifupdown-scripts` nel defconfig: **togliendo** la
+> riga. Il symbol e' `default y if BR2_ROOTFS_SKELETON_DEFAULT`, quindi la riga
+> `# BR2_PACKAGE_IFUPDOWN_SCRIPTS is not set` era l'override esplicito, e
+> `savedefconfig` non riscrive i valori di default. Un `git diff` che rimuove
+> una riga e accende un package sembra un errore e non lo e'.
+
+#### `CONFIG_NET` serve ad adbd due volte
+
+Nessuna delle due dipendenze e' dichiarata da nessuna parte, e si scoprono solo
+leggendo il sorgente:
+
+1. `unix_socketpair(AF_UNIX, SOCK_STREAM, 0, sv)` per ogni connessione di
+   servizio (`core/adb/sysdeps.h:470`); AF_UNIX e' compilato sotto `CONFIG_NET`.
+2. il `bind()` su 127.0.0.1:5037 di cui sopra, che richiede `lo` **attiva**,
+   non solo compilata.
+
+#### Un WARN di mainline su umount di functionfs
+
+Su `S45adb stop` compare:
+
+```
+WARNING: kernel/workqueue.c:4238 at __flush_work+0x11c/0x158, CPU#1: umount/324
+  cancel_work_sync from ffs_fs_kill_sb+0x9c/0xa8
+```
+
+Non e' nostro ed e' innocuo, ma vale la pena averlo scritto. Il `WARN` e'
+`WARN_ON(!work->func)`: `cancel_work_sync()` su un `work_struct` mai
+inizializzato. In mainline `ffs->reset_work` viene inizializzata **pigramente**,
+subito prima di essere schedulata (`f_fs.c:3764` e `3795`), mentre
+`ffs_fs_kill_sb` la cancella **sempre** (`f_fs.c:2101`). Se nessun reset e' mai
+avvenuto — mount, `adbd` esce, umount — `func` e' `NULL`.
+
+Il kernel 6.1 vendor non ha affatto quella `cancel_work_sync` in `kill_sb`: e'
+stata aggiunta a mainline dopo, senza spostare l'`INIT_WORK`. `cancel_work_sync`
+ritorna `false` e il danno finisce li'. La correzione sarebbe una riga —
+`INIT_WORK` in `ffs_data_new()` invece che al volo — ed e' un candidato pulito
+da proporre upstream. `TODO(verify):` se sia gia' segnalato in lista.

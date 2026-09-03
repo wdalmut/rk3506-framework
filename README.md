@@ -55,7 +55,8 @@ Cosa trovi gia' funzionante:
 - una variante `initramfs` per il bring-up senza dipendere dalla NAND
 - due varianti con **kernel mainline 6.19** (`ttyS0`), accanto alle due
   vendor 6.1 e non al loro posto — una initramfs e una con il rootfs su SPI
-  NAND: vedi [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
+  NAND e `adb`: vedi
+  [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
 
 Cosa cambiare appena forkato:
 
@@ -591,6 +592,52 @@ Nota per non cercare dalla parte sbagliata: **`rockchip-sfc` non compare nel
 `dmesg` nemmeno quando funziona.** Quel driver non ha un solo `dev_info`, solo
 `dev_err` e `dev_dbg`. La prova che il probe è andato è che esiste `spi0.0`.
 
+##### adb via USB
+
+`lyra_plus_mainline_defconfig` ha `adbd`, come i due defconfig vendor: stesso
+`S45adb`, stesso gadget configfs con la sola funzione `ffs.adb`, stessi
+VID/PID `2207:0006`.
+
+```
+S45adb: gadget ADB attivo su ff740000.usb (0x2207:0x0006)
+```
+
+La notizia buona è che **il PHY USB2 del RK3506 non richiede codice**. Il
+driver `phy-rockchip-inno-usb2` di mainline non conosce questo SoC, e portarlo
+non sarebbe una copia di tabella (mainline accede ai registri solo via regmap
+del GRF, il driver vendor scrive anche nei registri interni del PHY). Ma il
+nodo `dwc2` nel DTS è dichiarato **senza `phys`**, e dwc2 lo accetta —
+`devm_phy_get()` che torna `-ENODEV` lascia `hsotg->phy` a `NULL` e il probe
+continua. Sull'hardware il PHY esce dal reset già utilizzabile:
+
+```
+dwc2 ff740000.usb: EPs: 10, dedicated fifos, 972 entries in SPRAM
+dwc2 ff740000.usb: new device is high-speed
+```
+
+Due trappole incontrate arrivandoci, entrambe con sintomi che puntano nella
+direzione sbagliata:
+
+> **`CONFIG_USB_ETH` ruba l'UDC.** Riaccendendo `USB_SUPPORT` rientrano tutti i
+> simboli USB di `multi_v7`, fra cui il gadget Ethernet *legacy*: è compilato
+> dentro, si registra all'avvio e si prende l'unico UDC prima che lo user space
+> possa dire la sua (`bound driver g_ether`). A quel punto `configfs-gadget`
+> non ha più un UDC libero e `S45adb` non può funzionare per quanto sia
+> corretto. Gadget legacy e configfs sono alternativi.
+
+> **`adbd` ha bisogno che `lo` sia su.** Prima di guardare functionfs apre la
+> sua smartsocket su `127.0.0.1:5037` (`socket_loopback_server()`, bind su
+> `INADDR_LOOPBACK`). Se `lo` è giù il bind fallisce e `adbd` esce, con un
+> sintomo che accusa l'USB mentre l'USB è a posto: `ep0` esiste, l'UDC esiste,
+> e lo script dice solo *"adbd non ha scritto i descrittori"*. Il modo per
+> vederlo è `ADB_TRACE=all adbd` in primo piano — il tracing è compilato dentro
+> (`adb.h:344`). Lo tira su `S40network` di `ifupdown-scripts`, che il
+> defconfig installa; `S45adb` ha comunque una rete di sicurezza.
+>
+> Per lo stesso motivo il fragment accende `CONFIG_NET`: `adbd` lo usa due
+> volte, per `AF_UNIX` e per quel bind. Nessuna delle due dipendenze è
+> dichiarata da nessuna parte.
+
 Il boot completo, con la root montata da UBIFS:
 
 ```
@@ -602,10 +649,20 @@ VFS: Mounted root (ubifs filesystem) on device 0:13.
 ```
 
 La riga `re-sized` è quella che conta: il volume UBI cresce da solo fino a
-riempire la partizione (`vol_flags=autoresize`), quindi **la dimensione del
-chip non è cablata da nessuna parte** — né nel defconfig, né nella cmdline,
-né nel DTS. Su questo esemplare la NAND è da 256 MiB, la partizione `rootfs`
-224, il filesystem 210, e `df` mostra 193.8M disponibili.
+riempire la partizione (`vol_flags=autoresize`), quindi la **dimensione del
+volume** non è cablata da nessuna parte e si adatta al numero di blocchi buoni
+del singolo esemplare. Su questo la NAND è da 256 MiB, la partizione `rootfs`
+223.4, il filesystem 210, e `df` mostra 193.8M disponibili.
+
+> La **dimensione della partizione** invece va cablata, e la prima versione
+> sbagliava. Nel `mtdparts` la rootfs è `0xdf60000` (1787 blocchi), non `-`:
+> `-` vale *fino alla fine del dispositivo*, ma la partizione finisce 1058
+> settori prima, dove sta la GPT di backup. Con `-` la `mtd2` prendeva cinque
+> blocchi che non le appartengono, UBI ci scriveva dentro, e il riflash
+> successivo andava in kernel panic perché il tool — correttamente — non li
+> cancella. Il valore è quello che U-Boot calcola per le partizioni `grow`.
+> Dettagli e come è venuto fuori in
+> [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
 
 > `MAXLEBCNT=8456` sembra sovradimensionato (≈ 1 GiB) e la tentazione è
 > stringerlo. **Non farlo.** Un valore troppo piccolo non dà errore: tappa il
@@ -752,59 +809,48 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
-> #### ⚠️ Riflashare un rootfs UBI richiede prima una cancellazione
+> #### Se UBI non attacca dopo un riflash
 >
-> Vale per i due defconfig con rootfs su flash (`lyra_plus_defconfig` e
-> `lyra_plus_mainline_defconfig`) e **solo dal secondo flash in poi**.
->
-> Al primo attach UBI fa crescere il volume fino a riempire la partizione, e
-> nel farlo scrive un header EC su **tutti** i PEB — 1748, non i ~44 che
-> l'immagine occupa. `rootfs.img` invece resta di pochi MiB. Un flash
-> successivo riscrive solo quei pochi MiB e lascia in coda i PEB del giro
-> precedente.
->
-> UBI se ne accorge e si rifiuta di attaccare, perche' `ubinize` sceglie un
-> *image sequence number* **casuale a ogni build** (`ubi-utils/ubinize.c:113`,
-> `args.image_seq = rand()`):
+> Sintomo, sui defconfig con rootfs su flash:
 >
 > ```
-> ubi0 error: ubi_attach: bad image sequence number 1930484663 in PEB 1790, expected 152745098
-> ubi0 error: ubi_attach_mtd_dev: failed to attach mtd2, error -22
-> UBI error: cannot attach mtd2
-> VFS: Cannot open root device "ubi0:rootfs" ... error -19
+> ubi0 error: ubi_attach: bad image sequence number ... in PEB 1790, expected ...
 > Kernel panic - not syncing: VFS: Unable to mount root fs
 > ```
 >
-> Non e' un difetto della build: e' un controllo che esiste apposta. Il
-> commento sopra di esso, in `drivers/mtd/ubi/attach.c:1020-1024`, dice
-> testualmente che serve *"to detect situations when users flash UBI images
-> incorrectly, so that the flash has the new UBI image and leftovers from the
-> old one"*.
+> Significa che sulla flash sono rimasti PEB di un'immagine precedente, con un
+> *image sequence number* diverso: `ubinize` ne sceglie uno **casuale a ogni
+> build** (`ubi-utils/ubinize.c:113`, `args.image_seq = rand()`), e UBI
+> pretende che tutti i PEB abbiano lo stesso. Il controllo esiste apposta — il
+> commento in `drivers/mtd/ubi/attach.c:1020-1024` dice che serve *"to detect
+> situations when users flash UBI images incorrectly, so that the flash has the
+> new UBI image and leftovers from the old one"*.
 >
-> Il rimedio e' cancellare prima:
+> **In condizioni normali non deve succedere, e `uf` da solo basta.** Se
+> succede, la causa quasi certa è che la partizione MTD dichiarata al kernel è
+> più grande di quella che il tool di flash cancella — che è esattamente il bug
+> che questo albero ha avuto finché il `mtdparts` diceva `-` per la rootfs.
+> Prima di aggirarlo, confronta:
 >
 > ```bash
-> cd output/images
-> sudo upgrade_tool ef update.img              # EraseFlash: azzera tutto
-> sudo upgrade_tool uf update.img              # poi riscrive tutto
+> sudo upgrade_tool PL                      # la partizione secondo la GPT
+> grep CONFIG_CMDLINE= output/build/linux-*/.config   # quella dichiarata al kernel
 > ```
 >
-> Oppure, se si ha una shell sulla board (per esempio dalla variante
-> initramfs, che ha gli strumenti MTD proprio per questo):
+> Per uscirne una volta, e solo dopo aver verificato che il layout combaci:
 >
-> ```sh
-> flash_erase /dev/mtd2 0 0                    # 0 0 = tutta la partizione
+> ```bash
+> sudo upgrade_tool ef update.img           # EraseFlash: azzera tutto
+> sudo upgrade_tool uf update.img
 > ```
 >
-> **Quello che NON va fatto** e' fissare l'image sequence number con
+> Oppure, da una shell sulla board (per esempio dalla variante initramfs, che
+> ha gli strumenti MTD proprio per questo): `flash_erase /dev/mtd2 0 0`.
+>
+> **Quello che NON va fatto** è fissare l'image sequence number con
 > `ubinize -Q` per far combaciare i flash successivi: zittirebbe il controllo
 > lasciando sulla flash PEB del giro precedente che dichiarano di appartenere
-> al volume. Il controllo ha ragione; e' il flash parziale a essere sbagliato.
-
-Le varianti initramfs (vendor e mainline) **non producono `update.img`** se
-`afptool`/`rkImageMaker` non sono disponibili, e non hanno comunque un
-`rootfs.img` da scrivere: il rootfs e' dentro `boot.img`. Per quelle si usa il
-flash per partizione qui sotto, che e' anche il piu' rapido da iterare.
+> al volume.
 
 #### Variante initramfs, mainline o vendor
 

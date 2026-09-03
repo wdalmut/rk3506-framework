@@ -752,6 +752,55 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
+> #### ⚠️ Riflashare un rootfs UBI richiede prima una cancellazione
+>
+> Vale per i due defconfig con rootfs su flash (`lyra_plus_defconfig` e
+> `lyra_plus_mainline_defconfig`) e **solo dal secondo flash in poi**.
+>
+> Al primo attach UBI fa crescere il volume fino a riempire la partizione, e
+> nel farlo scrive un header EC su **tutti** i PEB — 1748, non i ~44 che
+> l'immagine occupa. `rootfs.img` invece resta di pochi MiB. Un flash
+> successivo riscrive solo quei pochi MiB e lascia in coda i PEB del giro
+> precedente.
+>
+> UBI se ne accorge e si rifiuta di attaccare, perche' `ubinize` sceglie un
+> *image sequence number* **casuale a ogni build** (`ubi-utils/ubinize.c:113`,
+> `args.image_seq = rand()`):
+>
+> ```
+> ubi0 error: ubi_attach: bad image sequence number 1930484663 in PEB 1790, expected 152745098
+> ubi0 error: ubi_attach_mtd_dev: failed to attach mtd2, error -22
+> UBI error: cannot attach mtd2
+> VFS: Cannot open root device "ubi0:rootfs" ... error -19
+> Kernel panic - not syncing: VFS: Unable to mount root fs
+> ```
+>
+> Non e' un difetto della build: e' un controllo che esiste apposta. Il
+> commento sopra di esso, in `drivers/mtd/ubi/attach.c:1020-1024`, dice
+> testualmente che serve *"to detect situations when users flash UBI images
+> incorrectly, so that the flash has the new UBI image and leftovers from the
+> old one"*.
+>
+> Il rimedio e' cancellare prima:
+>
+> ```bash
+> cd output/images
+> sudo upgrade_tool ef update.img              # EraseFlash: azzera tutto
+> sudo upgrade_tool uf update.img              # poi riscrive tutto
+> ```
+>
+> Oppure, se si ha una shell sulla board (per esempio dalla variante
+> initramfs, che ha gli strumenti MTD proprio per questo):
+>
+> ```sh
+> flash_erase /dev/mtd2 0 0                    # 0 0 = tutta la partizione
+> ```
+>
+> **Quello che NON va fatto** e' fissare l'image sequence number con
+> `ubinize -Q` per far combaciare i flash successivi: zittirebbe il controllo
+> lasciando sulla flash PEB del giro precedente che dichiarano di appartenere
+> al volume. Il controllo ha ragione; e' il flash parziale a essere sbagliato.
+
 Le varianti initramfs (vendor e mainline) **non producono `update.img`** se
 `afptool`/`rkImageMaker` non sono disponibili, e non hanno comunque un
 `rootfs.img` da scrivere: il rootfs e' dentro `boot.img`. Per quelle si usa il

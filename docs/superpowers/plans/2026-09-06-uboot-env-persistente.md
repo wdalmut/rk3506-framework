@@ -393,7 +393,13 @@ Ripristina: `head -c 3000000 /dev/zero > /tmp/binref/uboot.img`
 
 - [ ] **Step 4: Applica la sostituzione in `post-image.sh`**
 
-Aggiungi il source subito dopo la definizione di `TOPDIR` (dopo la riga 39), perche' `BOARD_DIR` e' gia' definito:
+Ancora per contenuto, non per numero di riga. Aggiungi il source subito dopo la riga
+
+```bash
+TOPDIR="$(cd "$BOARD_DIR/../../.." && pwd)"
+```
+
+perche' li' `BOARD_DIR` e' gia' definito:
 
 ```bash
 # Parser unico di parameter.txt: LYRA_ERASE_BLOCK, LYRA_SECTOR,
@@ -402,7 +408,13 @@ Aggiungi il source subito dopo la definizione di `TOPDIR` (dopo la riga 39), per
 . "$BOARD_DIR/flash-layout.sh"
 ```
 
-Poi sostituisci **l'intero blocco** dalla riga 303 (`msg "verifica dimensioni contro parameter.txt"`) alla riga 330 (`PYEOF`) con:
+Poi sostituisci **l'intero blocco** che va dalla riga
+
+```bash
+msg "verifica dimensioni contro parameter.txt"
+```
+
+fino alla riga `PYEOF` inclusa — cioe' il `msg`, l'invocazione `python3 - ... <<'PYEOF'`, tutto lo script python e il terminatore — con:
 
 ```bash
 msg "verifica dimensioni contro parameter.txt"
@@ -537,14 +549,25 @@ Expected: cinque righe; `env` ed `env_r` dicono `(nessuna env.img, salto)` e `(n
 - [ ] **Step 6: Guarda la tabella a occhio**
 
 Run: `external/board/lyra-plus/flash-layout.sh external/board/lyra-plus/parameter.txt`
+
+Expected: una riga di intestazione piu' cinque righe, `mtd0` … `mtd4`, con i
+nomi `uboot boot env env_r rootfs` e i valori `4194304/4194304`,
+`8388608/12582912`, `20971520/524288`, `21495808/524288`, `33554432/grow`.
+**Non** verificare l'allineamento delle colonne: la formattazione non e' un
+requisito e non c'e' niente che la fissi.
+
+Controllo meccanico della forma:
+```bash
+external/board/lyra-plus/flash-layout.sh external/board/lyra-plus/parameter.txt \
+	| awk 'NR>1 { print $1, $2, $3, $4 }'
+```
 Expected:
 ```
-idx  nome               offset           size
-mtd0 uboot             4194304        4194304
-mtd1 boot              8388608       12582912
-mtd2 env              20971520         524288
-mtd3 env_r            21495808         524288
-mtd4 rootfs           33554432           grow
+mtd0 uboot 4194304 4194304
+mtd1 boot 8388608 12582912
+mtd2 env 20971520 524288
+mtd3 env_r 21495808 524288
+mtd4 rootfs 33554432 grow
 ```
 
 - [ ] **Step 7: Commit**
@@ -840,8 +863,12 @@ Le patch si applicano all'estrazione, quindi serve ripartire dal sorgente:
 
 ```bash
 rm -rf output/build/uboot-*
-make uboot-rebuild 2>&1 | tail -40
+make uboot 2>&1 | tail -40
 ```
+`make uboot`, non `uboot-rebuild`: cancellata la build dir non ci sono piu' gli
+stamp su cui `-rebuild` si appoggia, e comunque qui serve proprio il percorso
+che ri-estrae e ri-applica le patch.
+
 Expected: nella traccia compaiono `Applying 0005-...patch` e `Applying 0006-...patch` senza `FAILED`. Verifica anche:
 ```bash
 cat output/build/uboot-*/.applied_patches_list
@@ -895,7 +922,7 @@ CONFIG_SYS_REDUNDAND_ENVIRONMENT e' la prova che la ridondanza c'e'."
 ## Task 5: `post-image.sh` fa fallire la build se i due lati divergono
 
 **Files:**
-- Modify: `external/board/lyra-plus/post-image.sh` (nuovo blocco dopo la riga 132)
+- Modify: `external/board/lyra-plus/post-image.sh` (nuovo blocco nella sezione 1, subito dopo il `die` che valida `UBOOT_DIR`)
 
 **Interfaces:**
 - Consumes: `flash_part` da Task 1; le partizioni di Task 3; i simboli in `autoconf.h` da Task 4.
@@ -923,7 +950,14 @@ Ripristina prima di proseguire: `cp /tmp/uboot.config.orig external/board/lyra-p
 
 - [ ] **Step 2: Aggiungi il blocco di verifica**
 
-In `post-image.sh`, subito dopo la riga 132 (`[ -n "$UBOOT_DIR" ] || die "directory di build di U-Boot non trovata sotto $BUILD_DIR"`), inserisci:
+Ancora per contenuto: Task 2 ha gia' spostato le righe di questo file, quindi non
+usare numeri di riga. Inserisci subito dopo
+
+```bash
+[ -n "$UBOOT_DIR" ] || die "directory di build di U-Boot non trovata sotto $BUILD_DIR"
+```
+
+il blocco:
 
 ```bash
 # ---------------------------------------------------------------------------
@@ -1195,9 +1229,17 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 	uboot_autoconf="${BASE_DIR:-}/build/uboot-$uboot_ver/include/generated/autoconf.h"
 	env_size="$(sed -n 's/^#define CONFIG_ENV_SIZE \(.*\)$/\1/p' "$uboot_autoconf" 2>/dev/null | tail -1)"
 
-	if [ -z "$env_size" ]; then
-		echo "post-build.sh: CONFIG_ENV_SIZE non leggibile da $uboot_autoconf," >&2
-		echo "               /etc/fw_env.config NON generato" >&2
+	if [ -z "$env_size" ] && ! grep -q '^BR2_TARGET_UBOOT=y$' "$BR2_CONFIG"; then
+		# Un fork che tiene fw_printenv ma toglie U-Boot dal build: non c'e'
+		# un CONFIG_ENV_SIZE da leggere e non e' un errore.
+		echo "post-build.sh: U-Boot non e' nel build, /etc/fw_env.config non generato" >&2
+	elif [ -z "$env_size" ]; then
+		# Qui invece U-Boot c'e' e l'header non si legge: un fw_env.config
+		# mancante non da' sintomi fino alla board, quindi si muore adesso.
+		echo "post-build.sh: CONFIG_ENV_SIZE non leggibile da" >&2
+		echo "               $uboot_autoconf" >&2
+		echo "               /etc/fw_env.config non puo' essere generato." >&2
+		exit 1
 	else
 		{
 			echo "# Generato da board/lyra-plus/post-build.sh da parameter.txt."
@@ -1347,32 +1389,65 @@ grep -n 'bootargs' "$K/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dts"
 ```
 Expected: una riga con `ubi.mtd=2`. Se `ubi.mtd=2` non c'e' o e' scritto diversamente, **fermati e riporta**: la patch va scritta su quello che c'e' davvero.
 
-- [ ] **Step 5: Scrivi il test che fallisce**
+- [ ] **Step 5: Aggiungi la guardia sul DTB in `post-image.sh`**
 
-Crea `/tmp/test-dtb-ubi.sh` (usa e getta):
+La guardia va scritta PRIMA della patch, altrimenti non c'e' modo di vederla
+fallire: il DTB con `ubi.mtd=2` esiste solo finche' la patch non c'e'.
+
+Ancora per contenuto, non per numero di riga (`post-image.sh` e' gia' stato
+modificato da Task 2 e Task 5): subito dopo la riga
 
 ```bash
-#!/usr/bin/env bash
-set -uo pipefail
-fail=0
-for d in output/build/linux-*/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dtb \
-         output/build/linux-*/arch/arm/boot/dts/rockchip/rk3506g-luckfox-lyra-plus.dtb; do
-	[ -f "$d" ] || continue
-	if strings "$d" | grep -qE 'ubi\.mtd=[0-9]'; then
-		echo "FAIL $d dichiara ubi.mtd=<numero>"
-		strings "$d" | grep -E 'ubi\.mtd=[0-9]'
-		fail=1
-	else
-		echo "ok   $d non cabla un indice MTD"
-	fi
-done
-exit $fail
+[ -f "$DTB" ] || die "DTB non trovato: $DTB"
 ```
 
-Run: `make linux-rebuild && bash /tmp/test-dtb-ubi.sh`
-Expected: FAIL sul DTB vendor — dichiara `ubi.mtd=2`, che dopo lo slittamento punta a `env`.
+inserisci:
 
-- [ ] **Step 6: Scrivi la patch al DTS vendor**
+```bash
+# La patch che porta ubi.mtd=2 -> ubi.mtd=rootfs nel DTS vendor e' agganciata
+# alla sottodirectory di versione patches/linux/<SHA>/. E' il prezzo di non
+# romperla sui due percorsi mainline, che hanno il DTS altrove — ma significa
+# che alzando lo SHA del kernel la patch smette di applicarsi SENZA UN
+# MESSAGGIO, e la board monta la partizione sbagliata.
+#
+# Il DTB e' gia' in mano allo script: si controlla li'. Sui DTB mainline il
+# nodo chosen non ha bootargs, quindi il controllo e' un no-op.
+if strings "$DTB" | grep -qE 'ubi\.mtd=[0-9]'; then
+	die "il DTB $DTB_NAME.dtb attacca UBI per INDICE:
+        $(strings "$DTB" | grep -oE 'ubi\.mtd=[0-9]+' | head -1)
+    Dopo l'aggiunta delle partizioni env/env_r la rootfs e' mtd4, non mtd2:
+    con questo bootargs il kernel attaccherebbe UBI all'area dell'env.
+    Quasi sempre significa che la patch al DTS vendor non si e' applicata
+    perche' BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION e' cambiato e la
+    sottodirectory external/board/lyra-plus/patches/linux/<SHA>/ non
+    corrisponde piu'. Rinominala con il nuovo SHA."
+fi
+```
+
+Poi:
+```bash
+bash -n external/board/lyra-plus/post-image.sh
+shellcheck -S warning external/board/lyra-plus/post-image.sh
+```
+Expected: nessun output.
+
+- [ ] **Step 6: Esegui il test — la build deve morire**
+
+```bash
+make lyra_plus_defconfig
+make 2>&1 | tail -15; echo "exit=${PIPESTATUS[0]}"
+```
+Expected: la build muore con
+```
+*** lyra-plus: il DTB rk3506g-luckfox-lyra-plus.dtb attacca UBI per INDICE:
+        ubi.mtd=2
+```
+e exit diverso da 0. Questo e' esattamente lo stato in cui si troverebbe
+chiunque alzasse lo SHA del kernel senza rinominare la sottodirectory delle
+patch: e' la condizione che la guardia deve intercettare, ed e' osservabile ora
+senza doverla simulare dopo.
+
+- [ ] **Step 7: Scrivi la patch al DTS vendor**
 
 ```bash
 K=output/build/linux-73bca17b67938d649b072408780369f600555263
@@ -1419,71 +1494,38 @@ EOF
 cat /tmp/0001-dts.diff >> "$P/0001-arm-dts-rk3506g-luckfox-lyra-plus-ubi-mtd-per-nome.patch"
 ```
 
-- [ ] **Step 7: Ricostruisci il kernel vendor e verifica che il test passi**
+- [ ] **Step 8: Ricostruisci e verifica che la build passi**
 
 ```bash
 rm -rf output/build/linux-73bca17b*
-make linux-rebuild 2>&1 | grep -i 'apply\|patch' | head
-bash /tmp/test-dtb-ubi.sh
+make 2>&1 | grep -iE 'apply|patch|ubi\.mtd' | head
+make 2>&1 | tail -15; echo "exit=${PIPESTATUS[0]}"
 ```
-Expected: la traccia mostra l'applicazione di `0001-arm-dts-...patch`; il test dice `ok`.
+Expected: nella traccia compare l'applicazione di
+`0001-arm-dts-rk3506g-luckfox-lyra-plus-ubi-mtd-per-nome.patch`, la guardia non
+scatta piu' e la build arriva in fondo.
 
-- [ ] **Step 8: Verifica che i mainline NON prendano la patch**
+Controllo diretto sul DTB costruito:
+```bash
+strings output/build/linux-73bca17b*/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dtb \
+	| grep -o 'ubi\.mtd=[^ "]*'
+```
+Expected: `ubi.mtd=rootfs`, e nessun `ubi.mtd=2`.
+
+- [ ] **Step 9: Verifica che i mainline NON prendano la patch**
 
 ```bash
 make lyra_plus_mainline_defconfig
 make linux-extract
-cat output/build/linux-d5ef611a*/.applied_patches_list 2>/dev/null || echo "(nessuna patch applicata)"
+ls output/build/linux-d5ef611a*/.applied_patches_list 2>/dev/null \
+	&& cat output/build/linux-d5ef611a*/.applied_patches_list \
+	|| echo "(nessuna patch applicata, come atteso)"
 ```
-Expected: nessuna patch al kernel, come oggi. Se comparisse `0001-arm-dts-...`, la sottodirectory di versione non sta funzionando e il piano va fermato.
+Expected: nessuna patch al kernel mainline. Se comparisse
+`0001-arm-dts-...`, la sottodirectory di versione non sta funzionando e il
+task va fermato e riportato.
 
-- [ ] **Step 9: Aggiungi il controllo sul DTB in `post-image.sh`**
-
-Subito dopo la riga `[ -f "$DTB" ] || die "DTB non trovato: $DTB"` (riga 241):
-
-```bash
-# La patch che porta ubi.mtd=2 -> ubi.mtd=rootfs nel DTS vendor e' agganciata
-# alla sottodirectory di versione patches/linux/<SHA>/. E' il prezzo di non
-# romperla sui due percorsi mainline, che hanno il DTS altrove — ma significa
-# che alzando lo SHA del kernel la patch smette di applicarsi SENZA UN
-# MESSAGGIO, e la board monta la partizione sbagliata.
-#
-# Il DTB e' gia' in mano allo script: si controlla li'. Sui DTB mainline il
-# nodo chosen non ha bootargs, quindi il controllo e' un no-op.
-if strings "$DTB" | grep -qE 'ubi\.mtd=[0-9]'; then
-	die "il DTB $DTB_NAME.dtb attacca UBI per INDICE:
-        $(strings "$DTB" | grep -oE 'ubi\.mtd=[0-9]+' | head -1)
-    Dopo l'aggiunta delle partizioni env/env_r la rootfs e' mtd4, non mtd2:
-    con questo bootargs il kernel attaccherebbe UBI all'area dell'env.
-    Quasi sempre significa che la patch al DTS vendor non si e' applicata
-    perche' BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION e' cambiato e la
-    sottodirectory external/board/lyra-plus/patches/linux/<SHA>/ non
-    corrisponde piu'. Rinominala con il nuovo SHA."
-fi
-```
-
-- [ ] **Step 10: Verifica che il controllo scatti davvero**
-
-```bash
-bash -n external/board/lyra-plus/post-image.sh
-shellcheck -S warning external/board/lyra-plus/post-image.sh
-# simula lo SHA alzato
-mv external/board/lyra-plus/patches/linux/73bca17b67938d649b072408780369f600555263 \
-   external/board/lyra-plus/patches/linux/0000000000000000000000000000000000000000
-make lyra_plus_defconfig && rm -rf output/build/linux-73bca17b* && make 2>&1 | tail -15
-```
-Expected: la build muore con `il DTB rk3506g-luckfox-lyra-plus.dtb attacca UBI per INDICE: ubi.mtd=2`.
-
-Ripristina:
-```bash
-mv external/board/lyra-plus/patches/linux/0000000000000000000000000000000000000000 \
-   external/board/lyra-plus/patches/linux/73bca17b67938d649b072408780369f600555263
-rm -rf output/build/linux-73bca17b*
-make 2>&1 | tail -15
-```
-Expected: la build arriva in fondo.
-
-- [ ] **Step 11: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add external/board/lyra-plus/linux-mainline.config \

@@ -353,6 +353,8 @@ set -uo pipefail
 BINARIES_DIR=/tmp/binref
 mib() { awk -v b="$1" 'BEGIN { printf "%8.2f", b / 1048576 }'; }
 
+layout="$(flash_layout "$BINARIES_DIR/parameter.txt")" || exit 1
+
 rc=0
 while IFS=$'\t' read -r _idx name off size; do
 	img="$BINARIES_DIR/$name.img"
@@ -369,7 +371,7 @@ while IFS=$'\t' read -r _idx name off size; do
 	if [ "$fsz" -le "$size" ]; then ok=OK; else ok="TROPPO GRANDE"; rc=1; fi
 	printf '    %-8s %s MiB / %s MiB  %s\n' \
 		"$name" "$(mib "$fsz")" "$(mib "$size")" "$ok"
-done < <(flash_layout "$BINARIES_DIR/parameter.txt")
+done <<<"$layout"
 
 exit $rc
 ```
@@ -423,6 +425,13 @@ msg "verifica dimensioni contro parameter.txt"
 # hanno niente da controllare e vengono saltate.
 mib() { awk -v b="$1" 'BEGIN { printf "%8.2f", b / 1048576 }'; }
 
+# flash_layout emette tutto o niente: se una voce di mtdparts non e'
+# riconosciuta non stampa nessuna riga e fallisce. Il suo stato di uscita va
+# raccolto QUI, perche' dentro una process substitution andrebbe perso e una
+# partizione che sparisce dall'elenco non darebbe nessun sintomo.
+layout="$(flash_layout "$BINARIES_DIR/parameter.txt")" \
+	|| die "parameter.txt non parsabile (vedi l'errore qui sopra)"
+
 size_rc=0
 while IFS=$'\t' read -r _idx name off size; do
 	img="$BINARIES_DIR/$name.img"
@@ -439,7 +448,7 @@ while IFS=$'\t' read -r _idx name off size; do
 	if [ "$fsz" -le "$size" ]; then ok=OK; else ok="TROPPO GRANDE"; size_rc=1; fi
 	printf '    %-8s %s MiB / %s MiB  %s\n' \
 		"$name" "$(mib "$fsz")" "$(mib "$size")" "$ok"
-done < <(flash_layout "$BINARIES_DIR/parameter.txt")
+done <<<"$layout"
 
 [ "$size_rc" = 0 ] || die "una immagine non entra nella sua partizione (vedi sopra)"
 ```
@@ -1229,6 +1238,14 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 	uboot_autoconf="${BASE_DIR:-}/build/uboot-$uboot_ver/include/generated/autoconf.h"
 	env_size="$(sed -n 's/^#define CONFIG_ENV_SIZE \(.*\)$/\1/p' "$uboot_autoconf" 2>/dev/null | tail -1)"
 
+	# flash_layout emette tutto o niente e il suo stato di uscita si perde
+	# dentro una process substitution: si raccoglie qui. Un fw_env.config
+	# troncato punterebbe a partizioni sbagliate senza dirlo a nessuno.
+	layout="$(flash_layout "$BOARD_DIR/parameter.txt")" || {
+		echo "post-build.sh: parameter.txt non parsabile, /etc/fw_env.config non generato" >&2
+		exit 1
+	}
+
 	if [ -z "$env_size" ] && ! grep -q '^BR2_TARGET_UBOOT=y$' "$BR2_CONFIG"; then
 		# Un fork che tiene fw_printenv ma toglie U-Boot dal build: non c'e'
 		# un CONFIG_ENV_SIZE da leggere e non e' un errore.
@@ -1254,7 +1271,7 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 					"$(printf '0x%x' "$(( env_size ))")" \
 					"$(printf '0x%x' "$LYRA_ERASE_BLOCK")" \
 					"$(( size / LYRA_ERASE_BLOCK ))"
-			done < <(flash_layout "$BOARD_DIR/parameter.txt")
+			done <<<"$layout"
 		} > "$TARGET_DIR/etc/fw_env.config"
 	fi
 fi

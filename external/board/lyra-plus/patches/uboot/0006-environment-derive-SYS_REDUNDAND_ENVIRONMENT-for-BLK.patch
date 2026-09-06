@@ -1,0 +1,36 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 6/6] environment: derive SYS_REDUNDAND_ENVIRONMENT for BLK_DEV
+
+include/environment.h deriva CONFIG_SYS_REDUNDAND_ENVIRONMENT da
+CONFIG_ENV_OFFSET_REDUND per ENV_IS_IN_FLASH, _IN_MMC, _IN_NAND e _IN_UBI,
+ma non ha un blocco per ENV_IS_IN_BLK_DEV.
+
+Senza quel define la ridondanza sparisce in silenzio, e in due punti:
+env_t non ha il byte `flags` (include/environment.h:165-171), quindi il
+serial number con cui si decide quale copia e' piu' recente non viene
+nemmeno scritto; e env_import_redund() non viene compilata (env/common.c:214).
+env_blk.c compila lo stesso, perche' i suoi blocchi sono sotto
+#ifdef CONFIG_ENV_OFFSET_REDUND, e si ottiene un ambiente che si crede
+ridondante e non lo e'.
+
+Si aggiunge il blocco mancante nella stessa forma degli altri backend,
+incluso il controllo su CONFIG_ENV_SIZE.
+
+--- a/include/environment.h	2026-09-06 19:44:37.861709452 +0200
++++ b/include/environment.h	2026-09-06 19:44:37.874017800 +0200
+@@ -106,6 +106,15 @@
+ # endif
+ #endif /* CONFIG_ENV_IS_IN_UBI */
+ 
++#if defined(CONFIG_ENV_IS_IN_BLK_DEV)
++# ifdef CONFIG_ENV_OFFSET_REDUND
++#  define CONFIG_SYS_REDUNDAND_ENVIRONMENT
++# endif
++# ifndef CONFIG_ENV_SIZE
++#  error "Need to define CONFIG_ENV_SIZE when using CONFIG_ENV_IS_IN_BLK_DEV"
++# endif
++#endif /* CONFIG_ENV_IS_IN_BLK_DEV */
++
+ /* Embedded env is only supported for some flash types */
+ #ifdef CONFIG_ENV_IS_EMBEDDED
+ # if	!defined(CONFIG_ENV_IS_IN_FLASH)	&& \

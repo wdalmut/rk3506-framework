@@ -236,10 +236,10 @@ vera. rkbin è 57 MB, quindi `post-image.sh` la rsyncia in
 
 ---
 
-## Il percorso mainline 6.19, accanto al vendor 6.1
+## Il percorso mainline 7.2, accanto al vendor 6.1
 
 `lyra_plus_mainline_initramfs_defconfig` costruisce la stessa board con un
-kernel **mainline 6.19.0** invece del vendor 6.1.99. È un terzo percorso, non
+kernel **mainline 7.2.3** invece del vendor 6.1.99. È un terzo percorso, non
 una sostituzione: i due defconfig vendor restano come termine di paragone.
 Quando il mainline non arriva al prompt, la domanda "è il kernel o è il
 packaging?" si risponde flashando l'altro.
@@ -248,7 +248,7 @@ Cosa cambia, e perché:
 
 | | vendor | mainline |
 |---|---|---|
-| kernel | `rk3506-kernel.git` 6.1.99 | `rk3506-kernel-upstream.git` 6.19.0 |
+| kernel | `rk3506-kernel.git` 6.1.99 | `rk3506-kernel-upstream.git` 7.2.3 |
 | defconfig kernel | `rk3506_luckfox` | `multi_v7` + fragment |
 | fragment | `linux.config` | `linux-mainline.config` |
 | DTB | in-tree o custom, senza sottodirectory | `rockchip/rk3506g-luckfox-lyra-plus` |
@@ -603,42 +603,91 @@ Nota sulle dimensioni, utile per decidere: l'insieme completo dei tarball di
 questo build e' **42 file per ~1.1 GB**, di cui 720 MB sono i tre tarball del
 kernel. Non e' un mirror grande.
 
-### Quanto divergiamo da mainline, e cosa costa il salto a 7.0
+### Quanto divergiamo da mainline, e cosa costa alzare la versione
 
 Il senso del percorso mainline e' capire quanto di questa board si regge su
-codice upstream, e potersi spostare dalla 6.19 alla 7.0 toccando poco. Questo
-richiede una regola su *dove* possono stare le modifiche, non solo quante
-sono.
+codice upstream, e potersi spostare da una release alla successiva toccando
+poco. Questo richiede una regola su *dove* possono stare le modifiche, non
+solo quante sono.
 
 **La regola: zero patch al codice del kernel.** Oggi e' rispettata, ma va
 letta guardando il branch del kernel per intero, non solo la parte nostra.
 
-Il branch `rk3506-lyra-plus` di `rk3506-kernel-upstream.git` ha **17 commit
-sopra il tag `v6.19`**, e sono di due provenienze diverse:
+Il branch `rk3506-lyra-plus-7.2` di `rk3506-kernel-upstream.git` ha **19
+commit in totale**: una radice snapshot piu' 18 commit, di due provenienze
+diverse:
 
 | provenienza | commit | cosa tocca |
 |---|---|---|
 | **Ye Zhang \<ye.zhang@rock-chips.com\>**, 2025-12-27 | 7 | tutto il codice C: `pinctrl-rockchip.c` (+282), `pinctrl-rockchip.h` (+20), `gpio-rockchip.c` (+2), i binding, i dtsi pinctrl/rmio generati (rk3506 e rv1126b) |
-| **nostri** | 9 | solo DTS/DTSI e `arch/arm/configs/rk3506_minimal.config` |
+| **nostri** | 11 | solo DTS/DTSI e `arch/arm/configs/rk3506_minimal.config` |
 
-I sette di Rockchip sono una serie **in volo verso upstream**, cherry-pickata
-qui: uno di essi (`gpio: rockchip: support new version GPIO`) porta gia'
-`Acked-by: Bartosz Golaszewski`, il maintainer di gpio. Questo cambia il
-segno del ragionamento sul salto di versione: quel codice non e' debito
-nostro da riportare, e' base che *arrivera'*. Quando la serie atterra, quei
-sette commit spariscono dal branch per assorbimento.
+I sette di Rockchip sono la serie [PATCH v4 0/7] *"pinctrl: rockchip: Add
+RK3506 and RV1126B pinctrl and RMIO support"*, cherry-pickata qui. Uno di essi
+(`gpio: rockchip: support new version GPIO`) porta gia' `Acked-by: Bartosz
+Golaszewski`, il maintainer di gpio.
 
-Verifica dei numeri (i due file DTS non sono in `v6.19`, li introduce il
-branch):
+**Non contarci come se fosse base in arrivo.** Verificato il 2026-09-06 su
+`torvalds/master` a 7.3-rc2: nessuno dei sette e' upstream, e nemmeno i file
+che aggiungono esistono (`rk3506-pinctrl.dtsi`, `rk3506-pinctrl-rmio.dtsi`,
+`rv1126b-pinctrl.dtsi`; zero occorrenze di `rmio` e `rv1126b` in
+`pinctrl-rockchip.c`). Sull'archivio `linux-rockchip` la v4 e' del 2025-12-27,
+non e' mai stata seguita da una v5, e l'ultimo messaggio del thread e' del
+2026-02-08. E' ferma su due obiezioni di progettazione, non su dettagli:
+
+- **Linus Walleij** rifiuta la proprieta' custom `rockchip,rmio-pins` e
+  pretende lo standard `pinmux = <>`
+  ([`CAD++jL=fri43Q...`](https://lore.kernel.org/linux-rockchip/CAD++jL=fri43Q1XbMJoOUeoWJw9RwMDJLjcjO8zSbyHb7z+Dzg@mail.gmail.com/)):
+  *"No custom invented properties please."*
+- **Krzysztof Kozlowski** boccia le 25 162 righe di `rk3506-pinctrl-rmio.dtsi`
+  generato
+  ([`b9e275cf...`](https://lore.kernel.org/linux-rockchip/b9e275cf-7c16-47cf-9699-82bc79aa7f90@kernel.org/)):
+  *"Upstream is not your SDK."* Ye Zhang risponde che in tal caso lo lasceranno
+  cadere.
+
+Quindi quei sette commit vanno riportati a ogni salto di versione, finche' la
+serie non riparte. La buona notizia e' che il rischio sul **nostro** DTS e'
+circoscritto: tutti i gruppi che usiamo — `uart0_xfer_pins`, `fspi_*_pins`,
+`eth_rmii1_*_pins` — stanno in `rk3506-pinctrl.dtsi` (1 795 righe,
+`rockchip,pins` classico), **non** nel file RMIO contestato. `rk3506.dtsi`
+include quest'ultimo ma non ne usa nulla: se muore upstream, si toglie una
+riga di `#include`.
+
+Verifica dei numeri, e un'insidia nel comando. Il commit radice del branch
+(`fed9dc990570`, *"Linux 7.2.3 (upstream tree snapshot)"*) e' **senza parent**:
+il suo tree e' identico a quello del tag `v7.2.3`, ma non c'e' merge-base fra i
+due. Quindi `v7.2.3..HEAD` **non conta i commit sopra la 7.2.3** — restituisce
+l'intero branch, radice compresa. Il conteggio va fatto dalla radice:
 
 ```sh
 cd ~/git/rk3506-kernel-upstream
-git log --format='%h %an %s' v6.19..HEAD
-git diff --numstat v6.19..HEAD
-git cat-file -e v6.19:arch/arm/boot/dts/rockchip/rk3506.dtsi   # fallisce
+B=rk3506-lyra-plus-7.2
+git merge-base --is-ancestor v7.2.3 $B || echo "nessuna ancestry: usa la radice"
+git rev-parse fed9dc990570^{tree} v7.2.3^{tree}     # due SHA identici
+git rev-list --count fed9dc990570..$B               # 18
+git log --format='%an' fed9dc990570..$B | sort | uniq -c
 ```
 
-Restano quindi i nove nostri, e la tabella che conta e' questa:
+**La forma appiattita e' deliberata, e il perche' e' misurato.** Nel salto del
+2026-09-06 il primo tentativo e' stato rebasare sul tag `v7.2.3` reale, quello
+con la storia di Linus dietro: il branch e' passato da 19 commit a **1 465 336**
+e il push su GitHub e' morto annunciando **11 694 909** oggetti da scrivere. Il
+repo pubblicato deve restare uno snapshot. La radice nuova si costruisce dal
+*tree* del tag:
+
+```sh
+ROOT=$(git commit-tree "v<nuova>^{tree}" -m "Linux <nuova> (upstream tree snapshot)")
+git switch -c rk3506-lyra-plus-<nuova> rk3506-lyra-plus-7.2
+git rebase --onto $ROOT fed9dc990570 rk3506-lyra-plus-<nuova>
+```
+
+e funziona solo dove i tag upstream esistono: il remote pubblica **solo** i
+nostri branch, quindi da un clone fresco serve prima aggiungere un remote
+`torvalds` (e `stable` per i tag `x.y.z`) e fetchare i tag. Il costo, con le
+altre voci, e' in
+[MAINLINE-STATO-E-RISCHI.md](MAINLINE-STATO-E-RISCHI.md).
+
+Restano quindi gli undici nostri, e la tabella che conta e' questa:
 
 | cosa | e' divergenza? | stato |
 |---|---|---|
@@ -650,7 +699,7 @@ Restano quindi i nove nostri, e la tabella che conta e' questa:
 
 La distinzione che conta e' la terza e la quarta. `rk3506g-luckfox-lyra-plus.dts` **non e'
 ancora in mainline**: e' il nostro contributo in corso, nel branch
-`rk3506-lyra-plus`. Aggiungerci una proprieta' corretta non e' forkare Linux,
+`rk3506-lyra-plus-7.2`. Aggiungerci una proprieta' corretta non e' forkare Linux,
 e' scrivere il supporto della board. Quando la board andra' upstream, la
 proprieta' va con lei e la divergenza e' zero per costruzione.
 
@@ -809,7 +858,7 @@ Risultato:
 
 ```
 # uname -a
-Linux lyra-plus 6.19.0 #2 SMP armv7l GNU/Linux
+Linux miranda 7.2.3 #1 SMP armv7l GNU/Linux
 ```
 
 `SMP` non e' un dettaglio: PSCI ha `method = "smc"`, servito da OP-TEE. Se il
@@ -865,7 +914,7 @@ sulla stessa board.** Contromisure, tutte a costo zero:
 - `post-image.sh` scrive `output/images/lyra-manifest.txt`: kernel, commit,
   DTB, console, provenienza di `resource_tool`.
 - accanto a `boot.img` compare un **hard link** con il nome della release del
-  kernel — `boot-6.1.99.img` oppure `boot-6.19.0.img`. Zero byte in più, e
+  kernel — `boot-6.1.99.img` oppure `boot-7.2.3.img`. Zero byte in più, e
   sulla scrivania i due file non si somigliano. Il nome viene da
   `include/config/kernel.release`, scritto dal kernel stesso.
 - `/etc/issue` sul target lo dice prima del prompt di login
@@ -922,7 +971,7 @@ if ((!mtd_id) || (!strcmp(part->mtd_id, mtd_id)))
 | | `mtd->name` di una spi-nand | perche' |
 |---|---|---|
 | kernel **vendor** 6.1 | `spi-nand0` | patch locale Rockchip: `mtd->name = "spi-nand0"` dentro `if (IS_ENABLED(CONFIG_SPI_ROCKCHIP_SFC))`, `drivers/mtd/nand/spi/core.c:1408-1409` |
-| kernel **mainline** 6.19 | `spi0.0` | quella patch non c'e': spinand registra con `name` NULL (`core.c:1672,1678`) e mtdcore ripiega su `dev_name(parent)`, cioe' il nome del device SPI (`mtdcore.c:896-897`) |
+| kernel **mainline** 7.2.3 | `spi0.0` | quella patch non c'e': spinand registra con `name` NULL (`core.c:2047,2053`) e mtdcore ripiega su `dev_name(parent)`, cioe' il nome del device SPI (`mtdcore.c:912-913`) |
 
 Quindi la stringa di U-Boot non combacia mai su mainline. E non combacia
 nemmeno il `CMDLINE:` di `board/lyra-plus/parameter.txt`, per due motivi
@@ -1195,7 +1244,9 @@ S45adb: adbd non ha scritto i descrittori su ep0, non lego l'UDC
 E le ipotesi comode cadono una per una: il percorso che `adbd` cerca e'
 `/dev/usb-ffs/adb/ep0`, identico a quello dello script; il formato *legacy* dei
 descrittori che `adbd` del 2013 usa e' ancora accettato, e il codice di
-`f_fs.c` che lo gestisce e' **identico** fra 6.1 e 6.19.
+`f_fs.c` che lo gestisce e' **invariato** fra il vendor 6.1 e mainline 7.2.3:
+`__ffs_data_got_descs()` differisce per la sola macro di tracing `ENTER()`,
+tolta upstream. Verificato il 2026-09-06.
 
 La risposta arriva solo mettendo `adbd` in primo piano. Il tracing e' compilato
 dentro (`#define ADB_TRACE 1`, `core/adb/adb.h:344`):
@@ -1261,3 +1312,4 @@ stata aggiunta a mainline dopo, senza spostare l'`INIT_WORK`. `cancel_work_sync`
 ritorna `false` e il danno finisce li'. La correzione sarebbe una riga —
 `INIT_WORK` in `ffs_data_new()` invece che al volo — ed e' un candidato pulito
 da proporre upstream. `TODO(verify):` se sia gia' segnalato in lista.
+

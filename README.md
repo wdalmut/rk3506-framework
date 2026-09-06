@@ -25,6 +25,7 @@ Questo README copre **come costruire e usare** il repository. Il resto sta in
 |-----------|---------------|
 | [docs/BOARD-FACTS.md](docs/BOARD-FACTS.md) | Ricognizione dell'SDK: ogni valore con la fonte esatta da cui e' stato ricavato, la catena di packaging Rockchip ricostruita comando per comando, e la tabella dei TODO aperti. **Il primo posto dove guardare se qualcosa non torna.** |
 | [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md) | Il *perche'* delle decisioni: glibc e non musl, `fit.sh` e non `make.sh`, nessuna patch a Buildroot, le quattro patch a U-Boot, AMP fuori scope. |
+| [docs/MAINLINE-STATO-E-RISCHI.md](docs/MAINLINE-STATO-E-RISCHI.md) | Il percorso mainline 7.2 valutato come base: cosa di RK3506 e' gia' upstream, cosa manca e a che costo (LED e rete sono DTS, non driver), e i dieci rischi in ordine di peso. **Da leggere prima di scegliere il percorso mainline per un progetto.** |
 | [docs/check-artifacts.sh](docs/check-artifacts.sh) | Controlla gli invarianti degli artefatti (struttura dei FIT, geometria UBI, offset, contenuto di `update.img`). Da lanciare dopo aver alzato uno SHA o toccato `post-image.sh`. |
 | [docs/RELEASE.md](docs/RELEASE.md) | Come pubblicare una release con le immagini gia' costruite, e cosa il testo deve dire. |
 | [docs/mk-vendor-mirror.sh](docs/mk-vendor-mirror.sh) | Ricostruisce i mirror di kernel e U-Boot da un checkout SDK shallow. |
@@ -53,10 +54,10 @@ Cosa trovi gia' funzionante:
 - accesso `adb` via USB
 - `hello-lyra`, che al boot dice se la board e' quella giusta e cosa vede
 - una variante `initramfs` per il bring-up senza dipendere dalla NAND
-- due varianti con **kernel mainline 6.19** (`ttyS0`), accanto alle due
+- due varianti con **kernel mainline 7.2** (`ttyS0`), accanto alle due
   vendor 6.1 e non al loro posto — una initramfs e una con il rootfs su SPI
   NAND e `adb`: vedi
-  [Variante mainline 6.19](#variante-mainline-619-kernel-upstream)
+  [Variante mainline 7.2](#variante-mainline-72-kernel-upstream)
 
 Cosa cambiare appena forkato:
 
@@ -156,12 +157,12 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     ├── configs/
     │   ├── lyra_plus_defconfig            SPI NAND + UBIFS (produzione)
     │   ├── lyra_plus_initramfs_defconfig  rootfs in RAM (bring-up)
-    │   ├── lyra_plus_mainline_defconfig   SPI NAND + UBIFS, kernel MAINLINE 6.19
+    │   ├── lyra_plus_mainline_defconfig   SPI NAND + UBIFS, kernel MAINLINE 7.2
     │   └── lyra_plus_mainline_initramfs_defconfig
-    │                                      rootfs in RAM, kernel MAINLINE 6.19
+    │                                      rootfs in RAM, kernel MAINLINE 7.2
     ├── board/lyra-plus/
     │   ├── linux.config          fragment kernel vendor 6.1
-    │   ├── linux-mainline.config fragment kernel mainline 6.19 (condiviso)
+    │   ├── linux-mainline.config fragment kernel mainline 7.2 (condiviso)
     │   ├── linux-mainline-flash.config
     │   │                         cmdline con root su UBIFS (solo mainline+flash)
     │   ├── uboot.config          fragment U-Boot
@@ -449,7 +450,7 @@ la NAND non viene toccata. Se la board arriva alla shell con questa immagine,
 NAND, UBI e partizionamento sono fuori dall'equazione — e resta da guardare
 solo il resto. E' l'immagine giusta con cui cominciare su hardware nuovo.
 
-### Variante mainline 6.19 (kernel upstream)
+### Variante mainline 7.2 (kernel upstream)
 
 ```bash
 make lyra_plus_mainline_initramfs_defconfig
@@ -457,7 +458,7 @@ make
 ```
 
 Stessa board, stesso U-Boot, stessa catena di packaging, ma kernel **mainline
-6.19.0** invece del vendor 6.1.99. Esiste per rispondere a una domanda sola:
+7.2.3** invece del vendor 6.1.99. Esiste per rispondere a una domanda sola:
 quanto di questa board si regge su codice upstream? Non sostituisce i due
 defconfig vendor, che restano intatti come termine di paragone.
 
@@ -465,7 +466,7 @@ Cosa cambia rispetto a `lyra_plus_initramfs_defconfig`:
 
 | | vendor | mainline |
 |---|---|---|
-| kernel | 6.1.99, `rk3506-kernel.git` | 6.19.0, `rk3506-kernel-upstream.git` |
+| kernel | 6.1.99, `rk3506-kernel.git` | 7.2.3, `rk3506-kernel-upstream.git` |
 | defconfig kernel | `rk3506_luckfox` | `multi_v7` + `linux-mainline.config` |
 | DTB | `dts/rk3506g-lyra-plus-initramfs.dts` | in-tree `rockchip/rk3506g-luckfox-lyra-plus` |
 | **console** | **`ttyFIQ0`** | **`ttyS0`** |
@@ -529,7 +530,7 @@ Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
 >
 > ```bash
 > cat output/images/lyra-manifest.txt      # kernel, commit, DTB, console
-> ls output/images/boot-*.img             # boot-6.1.99.img oppure boot-6.19.0.img
+> ls output/images/boot-*.img             # boot-6.1.99.img oppure boot-7.2.3.img
 > ```
 >
 > `boot-<release>.img` è un hard link a `boot.img` — stesso contenuto, zero
@@ -538,7 +539,7 @@ Il baudrate resta **1500000**: cambia il nome del device, non l'hardware —
 
 Il perché di ogni differenza è in
 [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *Il percorso
-mainline 6.19, accanto al vendor 6.1* — incluso il motivo per cui
+mainline 7.2, accanto al vendor 6.1* — incluso il motivo per cui
 `resource.img` non si può togliere e `resource_tool` è stato vendorizzato.
 
 #### Con il rootfs sulla SPI NAND
@@ -768,7 +769,7 @@ rkdeveloptool ld
 Un passo di dieci secondi che evita l'errore piu' costoso di questo albero —
 flashare il `boot.img` mainline su una board che ha il DTB vendor in NAND, o
 viceversa. Non da' errori: da' una board muta (vedi
-[Variante mainline 6.19](#variante-mainline-619-kernel-upstream)).
+[Variante mainline 7.2](#variante-mainline-72-kernel-upstream)).
 
 ```bash
 cat output/images/lyra-manifest.txt
@@ -777,9 +778,9 @@ cat output/images/lyra-manifest.txt
 ```
 board=lyra-plus
 soc=rk3506g2
-kernel_release=6.19.0
+kernel_release=7.2.3
 kernel_repo=https://github.com/wdalmut/rk3506-kernel-upstream.git
-kernel_commit=8f714b5131404d31d6964b686d7b6e7740f9dcab
+kernel_commit=d5ef611ad074dcbd1fb76fed48ca13046a93b72a
 kernel_defconfig=multi_v7
 dtb=rockchip/rk3506g-luckfox-lyra-plus.dtb
 console=ttyS0
@@ -790,15 +791,15 @@ Oppure, senza aprire niente:
 
 ```bash
 ls output/images/boot-*.img
-#   boot-6.19.0.img   -> mainline, console ttyS0
+#   boot-7.2.3.img  -> mainline, console ttyS0
 #   boot-6.1.99.img   -> vendor,   console ttyFIQ0
 ```
 
 | | vendor | mainline |
 |---|---|---|
-| `boot-*.img` | `boot-6.1.99.img` | `boot-6.19.0.img` |
+| `boot-*.img` | `boot-6.1.99.img` | `boot-7.2.3.img` |
 | `console=` nel manifest | `ttyFIQ0` | `ttyS0` |
-| `/etc/issue` a boot | `Luckfox Lyra Plus (RK3506G2) - initramfs bring-up` | `... - mainline 6.19 initramfs bring-up` |
+| `/etc/issue` a boot | `Luckfox Lyra Plus (RK3506G2) - initramfs bring-up` | `... - mainline 7.2.3 initramfs bring-up` |
 
 ### Immagine unica (consigliato)
 

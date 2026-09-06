@@ -85,9 +85,20 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 
 	# CONFIG_ENV_SIZE viene da U-Boot, non si cabla: post-image.sh ha gia'
 	# verificato che ci stia dentro la partizione.
+	#
+	# La leggibilita' si controlla PRIMA di leggere, non affidandosi a un
+	# valore vuoto lasciato da un comando fallito: sotto "set -euo pipefail"
+	# un sed su un file inesistente fa fallire l'intera pipeline (il
+	# "2>/dev/null" di prima sopprimeva solo il messaggio, non lo stato di
+	# uscita) e "set -e" avrebbe ucciso lo script qui, in silenzio, prima di
+	# arrivare ai due rami sotto che devono gestire proprio questo caso.
 	uboot_ver="$(sed -n 's/^BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION="\(.*\)"$/\1/p' "$BR2_CONFIG")"
 	uboot_autoconf="${BASE_DIR:-}/build/uboot-$uboot_ver/include/generated/autoconf.h"
-	env_size="$(sed -n 's/^#define CONFIG_ENV_SIZE \(.*\)$/\1/p' "$uboot_autoconf" 2>/dev/null | tail -1)"
+	if [ -r "$uboot_autoconf" ]; then
+		env_size="$(sed -n 's/^#define CONFIG_ENV_SIZE \(.*\)$/\1/p' "$uboot_autoconf" | tail -1)"
+	else
+		env_size=""
+	fi
 
 	# flash_layout emette tutto o niente e il suo stato di uscita si perde
 	# dentro una process substitution: si raccoglie qui. Un fw_env.config
@@ -109,6 +120,21 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 		echo "               /etc/fw_env.config non puo' essere generato." >&2
 		exit 1
 	else
+		# 'env' ed 'env_r' devono essere dichiarate per nome: flash_layout da
+		# solo non lo garantisce, filtra soltanto la sintassi di mtdparts=.
+		# Senza questo controllo un parameter.txt senza le due partizioni
+		# produrrebbe un fw_env.config con la sola intestazione e zero righe
+		# dati — lo stesso guasto silenzioso che questo file esiste per
+		# eliminare (vedi post-image.sh, che fa lo stesso controllo con
+		# flash_part per lo stesso motivo).
+		for p in env env_r; do
+			flash_part "$BOARD_DIR/parameter.txt" "$p" >/dev/null || {
+				echo "post-build.sh: parameter.txt non dichiara la partizione '$p'," >&2
+				echo "               /etc/fw_env.config non puo' essere generato." >&2
+				exit 1
+			}
+		done
+
 		{
 			echo "# Generato da board/lyra-plus/post-build.sh da parameter.txt."
 			echo "# NON modificare a mano: gli offset devono restare quelli"

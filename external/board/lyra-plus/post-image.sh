@@ -47,7 +47,7 @@ abspath() { case "$1" in ""|/*) printf '%s' "$1";; *) printf '%s' "$TOPDIR/$1";;
 #
 # Non basta `find -name 'linux-*' | head -1`: cambiando defconfig nello
 # stesso output/ i vecchi alberi restano, e con due kernel diversi (vendor
-# 6.1 e mainline 6.19, che hanno SHA diversi e quindi directory diverse)
+# 6.1 e mainline 7.2, che hanno SHA diversi e quindi directory diverse)
 # `head -1` prenderebbe quello sbagliato in modo non deterministico —
 # producendo un boot.img con il DTB di un kernel e lo zImage dell'altro.
 # I due DTB NON sono interscambiabili: gli ID clock dei dt-bindings sono
@@ -409,7 +409,7 @@ fi
 #     in piu'. boot.img resta al suo posto per i comandi di flash, ma sulla
 #     scrivania i due file hanno nomi diversi:
 #         boot-6.1.99.img   percorso vendor
-#         boot-6.19.0.img   percorso mainline
+#         boot-7.2.3.img   percorso mainline
 #     Il nome non e' inventato: viene da include/config/kernel.release,
 #     scritto dal kernel stesso.
 KERNEL_RELEASE="unknown"

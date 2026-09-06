@@ -1027,7 +1027,7 @@ Dopo il banner di U-Boot e i messaggi del kernel, `S99hello` esegue
     mtd2     224 MiB      128 KiB      rootfs
 
 Welcome to Luckfox Lyra Plus (RK3506G2)
-lyra-plus login:
+miranda login:
 ```
 
 Le righe che valgono davvero come verifica sono tre:

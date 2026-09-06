@@ -1313,3 +1313,79 @@ ritorna `false` e il danno finisce li'. La correzione sarebbe una riga —
 `INIT_WORK` in `ffs_data_new()` invece che al volo — ed e' un candidato pulito
 da proporre upstream. `TODO(verify):` se sia gia' segnalato in lista.
 
+---
+
+## La board di destinazione e' la Miranda V3, non la Lyra Plus
+
+Dichiarato il 2026-09-06. Questo framework non nasce per supportare la Luckfox
+Lyra Plus: nasce per una **board propria, la Miranda V3** — una Lyra
+specializzata sui workload di chi la costruisce. La Lyra Plus e' il veicolo di
+bring-up finche' il silicio proprio non c'e'.
+
+Detto prima, spiega a posteriori due scelte che altrimenti sembrano gusto
+personale:
+
+- **il dtsi minimale mainline e' scritto da zero** invece di potare
+  `rk3506-luckfox-lyra.dtsi`. Su un disegno proprio si parte dal file nostro,
+  non da *quello di terzi meno mille righe* — il ragionamento esteso e' in
+  [MAINLINE-STATO-E-RISCHI.md](MAINLINE-STATO-E-RISCHI.md), *Perche' su una
+  board propria conviene*;
+- **il percorso mainline esiste accanto al vendor**, e non al suo posto: su
+  hardware proprio il DTS vendor ereditato non serve, mentre serve sapere
+  quanto della board si regge su codice upstream.
+
+### Cosa e' gia' cambiato
+
+Solo l'**hostname**: `BR2_TARGET_GENERIC_HOSTNAME="miranda"` in tutti e quattro
+i defconfig. E' una riga per defconfig, applicata da un
+`TARGET_FINALIZE_HOOK` (`package/skeleton-init-common/skeleton-init-common.mk:52`),
+quindi non ricompila niente — riscrive `/etc/hostname`, la riga `127.0.1.1` di
+`/etc/hosts` e `/etc/issue`, poi ripacchetta la rootfs.
+
+`BR2_TARGET_GENERIC_ISSUE` **resta** `Luckfox Lyra Plus (RK3506G2)`: quello e'
+il modello dell'hardware su cui si sta girando, che non cambia perche' la
+macchina si chiama `miranda`. Al login si vede il modello nel banner e
+`miranda login:`.
+
+### Cosa NON e' cambiato, di proposito
+
+La rinomina della board e' **rimandata** all'arrivo della Miranda V3. Farla
+adesso significherebbe toccare il percorso vendor per un beneficio nullo
+finche' la board non esiste. Quando sara' il momento, questo e' l'inventario —
+misurato il 2026-09-06, `output/` e `buildroot/` esclusi.
+
+**Riferimenti duri** (rinominarli rompe la build se si sbaglia un punto):
+
+| cosa | dove | note |
+|---|---|---|
+| `name: LYRA_PLUS` | `external/external.desc` | genera `BR2_EXTERNAL_LYRA_PLUS_PATH`, usato **35 volte** |
+| 4 defconfig | `external/configs/lyra_plus*_defconfig` | sono i target di `make <nome>_defconfig` |
+| directory board | `external/board/lyra-plus/` | raggiunta come `$(BR2_EXTERNAL_LYRA_PLUS_PATH)/board/lyra-plus/...` |
+| package | `external/package/hello-lyra/` | simbolo `BR2_PACKAGE_HELLO_LYRA`, acceso in tutti e 4 i defconfig |
+| DTS custom | `board/lyra-plus/dts/rk3506g-lyra-plus-initramfs.dts` | puntato da `BR2_LINUX_KERNEL_CUSTOM_DTS_PATH` |
+| identita' negli artefatti | `board=lyra-plus` (`post-image.sh:420`), `BOARD=lyra-plus` (`post-build.sh:23`) | finiscono in `lyra-manifest.txt` |
+
+**Volume complessivo**: `LYRA_PLUS` 32 occorrenze in 10 file, `lyra_plus` 51 in
+14, `lyra-plus` 100 in 26, `hello-lyra` 42 in 13, `Lyra Plus` 38 in 21.
+
+**Due cose che NON vanno rinominate**, ed e' il motivo per cui un
+`sed -i s/lyra/miranda/g` sull'albero e' sbagliato:
+
+- **`rk3506g-luckfox-lyra-plus`** (16 occorrenze) e' il nome del DTS **in-tree
+  upstream**, e il DTB si chiama cosi' perche' l'hardware e' quello. Cambia
+  solo il giorno in cui esiste un DTS della Miranda V3 in mainline — cioe' con
+  un contributo upstream, non con una rinomina locale.
+- **`docs/release-notes-v0.1.0.md` e `v0.2.0.md`** sono verbali di release gia'
+  pubblicate. Riscriverli falsifica la storia: le immagini di quelle release
+  dicono `lyra-plus` e continueranno a dirlo.
+
+### Ordine di lavoro quando arriva la board
+
+1. Prima il **DTS della Miranda V3**, che e' il lavoro vero. La rinomina dei
+   percorsi e' cosmetica e puo' seguire.
+2. Decidere se il supporto Lyra Plus **resta** come termine di paragone — vale
+   lo stesso argomento che tiene in piedi il percorso vendor accanto al
+   mainline: avere sempre l'altra strada funzionante e' il paracadute — oppure
+   se esce di scena.
+3. Solo allora la rinomina, in un commit suo, con `check-artifacts.sh`
+   aggiornato nello stesso commit.

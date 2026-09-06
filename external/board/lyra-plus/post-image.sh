@@ -135,6 +135,93 @@ fi
 UBOOT_DIR="$(pkgdir uboot BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
 [ -n "$UBOOT_DIR" ] || die "directory di build di U-Boot non trovata sotto $BUILD_DIR"
 
+# ---------------------------------------------------------------------------
+# 1a. Coerenza degli offset dell'environment
+# ---------------------------------------------------------------------------
+# Gli offset dell'env sono dichiarati in due posti indipendenti: uboot.config
+# (che diventa autoconf.h) e parameter.txt (che diventa la GPT, e da li'
+# mtdparts). Il terzo posto, /etc/fw_env.config, e' GENERATO da post-build.sh
+# a partire da parameter.txt, quindi non puo' divergere.
+#
+# Se i due che restano divergono il sintomo e' subdolo: fw_setenv "riesce" e
+# U-Boot legge un'altra area. Meglio morire qui.
+#
+# Si legge include/generated/autoconf.h e non uboot.config perche' l'header
+# generato e' il valore EFFETTIVO: cattura anche un valore che arrivasse da un
+# default Kconfig o da include/configs/evb_rk3506.h invece che dal fragment.
+UBOOT_AUTOCONF="$UBOOT_DIR/include/generated/autoconf.h"
+uboot_def() { sed -n "s/^#define $1 \\(.*\\)\$/\\1/p" "$UBOOT_AUTOCONF" | tail -1; }
+
+if [ ! -r "$UBOOT_AUTOCONF" ]; then
+	warn "autoconf.h di U-Boot non leggibile, salto la verifica degli offset env:
+    $UBOOT_AUTOCONF"
+elif [ -z "$(uboot_def CONFIG_ENV_IS_IN_BLK_DEV)" ]; then
+	# Un fork che toglie il fragment deve poter costruire lo stesso.
+	warn "U-Boot non ha CONFIG_ENV_IS_IN_BLK_DEV: l'environment NON e'
+    persistente, saveenv non scrivera' da nessuna parte. Salto la verifica
+    degli offset."
+else
+	msg "verifica offset env: uboot.config <-> parameter.txt"
+
+	env_off="$(uboot_def CONFIG_ENV_OFFSET)"
+	env_red="$(uboot_def CONFIG_ENV_OFFSET_REDUND)"
+	env_size="$(uboot_def CONFIG_ENV_SIZE)"
+
+	[ -n "$env_off" ]  || die "CONFIG_ENV_OFFSET assente da autoconf.h"
+	[ -n "$env_size" ] || die "CONFIG_ENV_SIZE assente da autoconf.h"
+	[ -n "$env_red" ]  || die "CONFIG_ENV_OFFSET_REDUND assente da autoconf.h.
+    L'env sarebbe a copia singola, e in silenzio: env_t resterebbe senza il
+    byte 'flags' e env_import_redund() non verrebbe compilata.
+    Quasi sempre significa che le patch 0005/0006 a U-Boot non si sono
+    applicate. Controlla output/build/uboot-*/.applied_patches_list."
+
+	env_off=$(( env_off )); env_red=$(( env_red )); env_size=$(( env_size ))
+
+	p_env="$(flash_part "$BOARD_DIR/parameter.txt" env)" \
+		|| die "parameter.txt non dichiara la partizione 'env'"
+	p_red="$(flash_part "$BOARD_DIR/parameter.txt" env_r)" \
+		|| die "parameter.txt non dichiara la partizione 'env_r'"
+
+	read -r _ p_env_off p_env_size <<<"$p_env"
+	read -r _ p_red_off p_red_size <<<"$p_red"
+
+	[ "$env_off" = "$p_env_off" ] || die "CONFIG_ENV_OFFSET non e' l'offset della partizione 'env':
+    uboot.config    CONFIG_ENV_OFFSET  = $env_off
+    parameter.txt   partizione 'env'   @ $p_env_off
+    differenza      $(( env_off - p_env_off )) byte
+    parameter.txt e' la fonte: allinea uboot.config."
+
+	[ "$env_red" = "$p_red_off" ] || die "CONFIG_ENV_OFFSET_REDUND non e' l'offset della partizione 'env_r':
+    uboot.config    CONFIG_ENV_OFFSET_REDUND = $env_red
+    parameter.txt   partizione 'env_r'       @ $p_red_off
+    differenza      $(( env_red - p_red_off )) byte
+    parameter.txt e' la fonte: allinea uboot.config."
+
+	# Sanita': le due copie devono stare in partizioni diverse, ognuna deve
+	# entrarci, e ogni offset deve cadere su un confine di erase block —
+	# altrimenti mtd_map_write() cancella un blocco che contiene altro.
+	[ "$env_off" != "$env_red" ] \
+		|| die "CONFIG_ENV_OFFSET e CONFIG_ENV_OFFSET_REDUND coincidono ($env_off):
+    non e' ridondanza, e' una copia sola scritta due volte."
+
+	[ "$env_size" -le "$p_env_size" ] \
+		|| die "CONFIG_ENV_SIZE ($env_size) e' piu' grande della partizione 'env' ($p_env_size)."
+	[ "$env_size" -le "$p_red_size" ] \
+		|| die "CONFIG_ENV_SIZE ($env_size) e' piu' grande della partizione 'env_r' ($p_red_size)."
+
+	[ $(( env_off % LYRA_ERASE_BLOCK )) = 0 ] \
+		|| die "CONFIG_ENV_OFFSET ($env_off) non e' allineato all'erase block ($LYRA_ERASE_BLOCK)."
+	[ $(( env_red % LYRA_ERASE_BLOCK )) = 0 ] \
+		|| die "CONFIG_ENV_OFFSET_REDUND ($env_red) non e' allineato all'erase block ($LYRA_ERASE_BLOCK)."
+	[ $(( env_size % LYRA_ERASE_BLOCK )) = 0 ] \
+		|| die "CONFIG_ENV_SIZE ($env_size) non e' un multiplo dell'erase block ($LYRA_ERASE_BLOCK)."
+
+	printf '    env    @ %-10s size %-8s (partizione %s B)\n' \
+		"$env_off" "$env_size" "$p_env_size"
+	printf '    env_r  @ %-10s size %-8s (partizione %s B)\n' \
+		"$env_red" "$env_size" "$p_red_size"
+fi
+
 # Serve una COPIA, non un symlink: la catena vendor scrive dentro rkbin.
 # spl.sh fa `rm tmp -rf && mkdir tmp -p` nella radice di rkbin
 # (scripts/spl.sh:54), ci copia lo SPL e l'ini, e boot_merger ci deposita

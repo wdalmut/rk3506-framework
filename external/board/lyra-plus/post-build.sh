@@ -83,8 +83,14 @@ if grep -q '^BR2_PACKAGE_UBOOT_TOOLS_FWPRINTENV=y$' "${BR2_CONFIG:-/dev/null}"; 
 	# shellcheck source=flash-layout.sh
 	. "$BOARD_DIR/flash-layout.sh"
 
-	# CONFIG_ENV_SIZE viene da U-Boot, non si cabla: post-image.sh ha gia'
-	# verificato che ci stia dentro la partizione.
+	# CONFIG_ENV_SIZE viene da U-Boot, non si cabla. Che ci stia dentro la
+	# partizione lo verifica post-image.sh, che gira DOPO questo script nella
+	# stessa build (post-build.sh e' agganciato a target-finalize,
+	# post-image.sh a target-post-image, che da target-finalize dipende:
+	# buildroot/Makefile:827, :845 e :848). Se diverge la build muore li', quindi
+	# niente immagine sbagliata — ma il /etc/fw_env.config di questo passaggio
+	# resta in output/target/, ed e' quello di una build fallita: non fidarsene
+	# come se fosse gia' stato validato.
 	#
 	# La leggibilita' si controlla PRIMA di leggere, non affidandosi a un
 	# valore vuoto lasciato da un comando fallito: sotto "set -euo pipefail"

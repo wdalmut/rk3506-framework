@@ -574,9 +574,9 @@ else
 fi
 
 # Controllo che l'SDK fa in mk-firmware.sh:52-64: ogni immagine deve entrare
-# nella partizione dichiarata in parameter.txt. Le partizioni senza immagine -
-# 'rootfs' nelle varianti initramfs - non hanno niente da controllare e
-# vengono saltate.
+# nella partizione dichiarata in parameter.txt. Le partizioni senza immagine
+# - env, env_r, e 'rootfs' nelle varianti initramfs - non hanno niente da
+# controllare e vengono saltate.
 msg "verifica dimensioni contro parameter.txt"
 mib() { awk -v b="$1" 'BEGIN { printf "%8.2f", b / 1048576 }'; }
 
@@ -666,7 +666,7 @@ if [ "$INITRAMFS" = 0 ] && [ -x "$HOST_DIR/bin/genimage" ]; then
 	# trascritto a mano, e nessuno li confrontava con parameter.txt. Ora non si
 	# trascrivono: il genimage.cfg committato porta i segnaposto @OFFSET_<nome>@
 	# e qui vengono sostituiti con i byte che flash_layout legge da
-	# parameter.txt.
+	# parameter.txt, come /etc/fw_env.config in post-build.sh.
 	GENIMAGE_CFG="$WORK/genimage.cfg"
 	cp -f "$BOARD_DIR/genimage.cfg" "$GENIMAGE_CFG"
 	while IFS=$'\t' read -r _gidx gname goff _gsize; do

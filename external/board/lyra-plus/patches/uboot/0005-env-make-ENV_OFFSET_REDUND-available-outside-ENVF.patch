@@ -13,7 +13,7 @@ Il simbolo esce da `if ENVF` e prende `depends on ENVF || ENV_IS_IN_BLK_DEV`
 invece di restare senza vincoli. Senza il depends on sarebbe visibile a
 tutti i board Rockchip con il suo `default ENV_OFFSET`, e per un board con
 ENV_IS_IN_MMC questo definirebbe CONFIG_ENV_OFFSET_REDUND uguale a
-CONFIG_ENV_OFFSET: include/environment.h:63-67 accenderebbe
+CONFIG_ENV_OFFSET: include/environment.h:64-68 accenderebbe
 CONFIG_SYS_REDUNDAND_ENVIRONMENT con le due copie allo STESSO offset, cioe'
 una ridondanza finta. Con il depends on la visibilita' per ENVF resta
 identica a oggi.

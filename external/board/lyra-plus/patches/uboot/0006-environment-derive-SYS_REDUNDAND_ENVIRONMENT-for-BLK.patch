@@ -5,13 +5,28 @@ include/environment.h deriva CONFIG_SYS_REDUNDAND_ENVIRONMENT da
 CONFIG_ENV_OFFSET_REDUND per ENV_IS_IN_FLASH, _IN_MMC, _IN_NAND e _IN_UBI,
 ma non ha un blocco per ENV_IS_IN_BLK_DEV.
 
-Senza quel define la ridondanza sparisce in silenzio, e in due punti:
-env_t non ha il byte `flags` (include/environment.h:165-171), quindi il
-serial number con cui si decide quale copia e' piu' recente non viene
-nemmeno scritto; e env_import_redund() non viene compilata (env/common.c:214).
-env_blk.c compila lo stesso, perche' i suoi blocchi sono sotto
-#ifdef CONFIG_ENV_OFFSET_REDUND, e si ottiene un ambiente che si crede
-ridondante e non lo e'.
+Senza la patch 0005 (ENV_OFFSET_REDUND ancora dentro `if ENVF`) il buco e'
+silenzioso: la build riesce, CONFIG_ENV_OFFSET_REDUND non e' mai definito e
+l'ambiente resta a copia singola senza nessun errore che lo segnali (e' il
+caso dimostrato dalla build intermedia di questo task).
+
+Con la 0005 applicata e questa mancante il buco non e' piu' silenzioso, ma
+si sposta al link: CONFIG_ENV_OFFSET_REDUND e' definito, quindi
+env_blk_load() chiama env_import_redund() (env/env_blk.c:222, dentro il
+blocco gated da `#ifdef CONFIG_ENV_OFFSET_REDUND` a env/env_blk.c:171), ma
+env/common.c la compila solo sotto CONFIG_SYS_REDUNDAND_ENVIRONMENT
+(env/common.c:213-216), che senza questa patch non viene mai definito:
+undefined reference a env_import_redund in fase di link. L'oggetto
+env_blk.o compila, l'immagine no.
+
+Lo stesso define e' anche cio' che rende significativa l'alternanza fra le
+due copie, non solo il layout di env_t (che senza
+CONFIG_SYS_REDUNDAND_ENVIRONMENT non ha il byte `flags`,
+include/environment.h:165-171) e la compilazione di env_import_redund():
+env/common.c:281-283 incrementa env_out->flags (il serial number con cui
+si decide quale copia e' piu' recente) solo sotto lo stesso define. Senza
+questa patch quell'incremento non esisterebbe nemmeno, quindi le due copie
+non avrebbero modo di dirsi quale e' la piu' recente.
 
 Si aggiunge il blocco mancante nella stessa forma degli altri backend,
 incluso il controllo su CONFIG_ENV_SIZE.

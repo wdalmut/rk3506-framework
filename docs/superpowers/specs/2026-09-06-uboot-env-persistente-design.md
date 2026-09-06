@@ -1,7 +1,10 @@
 # Environment U-Boot persistente e ridondante su SPI NAND
 
-Design approvato il 2026-09-06. Board: Luckfox Lyra Plus (RK3506G2), 256 MiB
-SPI NAND, erase block 128 KiB.
+Design approvato il 2026-09-06. Board di destinazione: **Miranda V3**; il
+veicolo di bring-up e' la Luckfox Lyra Plus (RK3506G2), 256 MiB SPI NAND,
+erase block 128 KiB. I path nell'albero dicono ancora `lyra-plus` perche' la
+rinomina e' rimandata all'arrivo della Miranda V3: questo design non la
+anticipa.
 
 I fatti su cui questo documento si appoggia stanno in
 [BOARD-FACTS.md](../../BOARD-FACTS.md); il *perché* delle scelte, una volta

@@ -138,10 +138,11 @@ UBOOT_DIR="$(pkgdir uboot BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION)"
 # ---------------------------------------------------------------------------
 # 1a. Coerenza degli offset dell'environment
 # ---------------------------------------------------------------------------
-# Gli offset dell'env sono dichiarati in due posti indipendenti: uboot.config
+# Qui si confrontano due dei posti in cui l'env e' dichiarato: uboot.config
 # (che diventa autoconf.h) e parameter.txt (che diventa la GPT, e da li'
-# mtdparts). Il terzo posto, /etc/fw_env.config, e' GENERATO da post-build.sh
-# a partire da parameter.txt, quindi non puo' divergere.
+# mtdparts). Gli altri: /etc/fw_env.config e' GENERATO da post-build.sh a
+# partire da parameter.txt, quindi non puo' divergere; il CONFIG_CMDLINE dei
+# due fragment mainline lo confronta il blocco 2a piu' sotto.
 #
 # Se i due che restano divergono il sintomo e' subdolo: fw_setenv "riesce" e
 # U-Boot legge un'altra area. Meglio morire qui.
@@ -293,22 +294,25 @@ LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 # ---------------------------------------------------------------------------
 # 2a. Coerenza del layout MTD cablato nella riga di comando del kernel
 # ---------------------------------------------------------------------------
-# Gli ultimi due posti in cui il layout e' ancora dichiarato a mano:
+# Gli altri due posti in cui il layout e' dichiarato a mano:
 # linux-mainline.config e linux-mainline-flash.config cablano l'intera stringa
 # mtdparts= dentro CONFIG_CMDLINE, e mettono CONFIG_CMDLINE_FORCE=y. Su
 # lyra_plus_mainline_defconfig e lyra_plus_mainline_initramfs_defconfig il
 # kernel quindi IGNORA il bootargs che gli passa U-Boot: sono quelle due
-# stringhe, da sole, a decidere cosa sono /dev/mtd0, mtd1 e mtd2 — mentre la
-# GPT che il tool di flash scrive viene da parameter.txt. Sono due
-# dichiarazioni dello stesso layout, e finora nessuno le confrontava. Se
-# divergono:
+# stringhe, da sole, a decidere cosa sono /dev/mtd0 .. /dev/mtd4 — mentre la
+# GPT che il tool di flash scrive, e /etc/fw_env.config che post-build.sh
+# genera, vengono entrambi da parameter.txt. Sono due dichiarazioni dello
+# stesso layout, e finora nessuno le confrontava. Se divergono:
 #
 #   - offset diverso  -> il kernel cerca una partizione dove il tool di flash
-#                        non ha scritto niente;
-#   - numero o ordine diversi -> /dev/mtdN non e' piu' la partizione che la
-#                        GPT chiama con quell'indice, e tutto cio' che va per
-#                        indice punta altrove;
-#   - size diversa    -> per la rootfs e' la trappola dei blocchi in eccesso
+#                        non ha scritto niente, e fw_setenv scrive a 20 MiB
+#                        mentre U-Boot legge altrove;
+#   - numero o ordine diversi -> gli indici mtd slittano: /dev/mtdN non e' piu'
+#                        la partizione che la GPT chiama con quell'indice, e
+#                        fw_setenv finisce a cancellare un erase block del
+#                        volume UBI;
+#   - size diversa    -> il "#sectors" di fw_env.config non e' la partizione;
+#                        e per la rootfs e' la trappola dei blocchi in eccesso
 #                        gia' spiegata in linux-mainline.config: UBI cresce in
 #                        blocchi fuori partizione, ci scrive header EC, e al
 #                        riflash successivo il boot muore su "bad image
@@ -316,7 +320,8 @@ LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 #
 # Nessuno dei tre da' un errore a build time senza questo blocco.
 #
-# Si legge $LINUX_DIR/.config e non i due fragment: il valore generato e'
+# Si legge $LINUX_DIR/.config e non i due fragment, per la stessa ragione per
+# cui il blocco 1a legge autoconf.h e non uboot.config: il valore generato e'
 # quello che spedisce, e cosi' si intercetta anche un CONFIG_CMDLINE che
 # arrivasse dal defconfig di base o da un altro fragment.
 #
@@ -381,9 +386,9 @@ else
 		k_count=$(( k_count + 1 ))
 	done <<<"${kparts//,/$'\n'}"
 
-	# Come nel blocco delle dimensioni: flash_layout emette tutto o niente, e
-	# dentro una process substitution il suo stato di uscita andrebbe perso. Si
-	# raccoglie qui.
+	# Come nel blocco 1a, nel blocco delle dimensioni e in post-build.sh:
+	# flash_layout emette tutto o niente, e dentro una process substitution
+	# il suo stato di uscita andrebbe perso. Si raccoglie qui.
 	klayout="$(flash_layout "$BOARD_DIR/parameter.txt")" \
 		|| die "parameter.txt non parsabile (vedi l'errore qui sopra)"
 
@@ -393,9 +398,11 @@ else
 		p_count=$(( p_count + 1 ))
 	done <<<"$klayout"
 
-	# Il numero di partizioni e' esso stesso un confronto: una voce in piu' o in
-	# meno slitta l'indice mtd di tutte quelle che vengono dopo, e da quel punto
-	# i due elenchi parlano di partizioni diverse con lo stesso nome di device.
+	# Il numero di partizioni e' esso stesso un confronto: una voce in piu' o
+	# in meno slitta gli indici mtd di tutte quelle che vengono dopo.
+	# fw_env.config, generato da parameter.txt, seguirebbe; la stringa del
+	# kernel no, e fw_setenv finirebbe a cancellare un erase block della
+	# partizione sbagliata.
 	[ "$k_count" = "$p_count" ] || die "il numero di partizioni MTD non coincide:
     CONFIG_CMDLINE  $k_count partizioni: ${k_names[*]}
     parameter.txt   $p_count partizioni: ${p_names[*]}

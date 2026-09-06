@@ -21,6 +21,10 @@
 # Uso, eseguendolo (stampa la tabella, comodo a mano):
 #     ./flash-layout.sh parameter.txt
 
+# Erase block della SPI NAND. NON e' ricavabile da parameter.txt: e' un fatto
+# della board, misurato. Fonte: docs/BOARD-FACTS.md.
+export LYRA_ERASE_BLOCK=131072
+
 # Unita' della riga CMDLINE di parameter.txt.
 export LYRA_SECTOR=512
 

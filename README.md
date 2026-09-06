@@ -820,13 +820,29 @@ sudo rkdeveloptool rd                        # reset
 > Al primo boot dopo un riflash U-Boot stampa
 >
 > ```
-> *** Error - No Valid Environment Area found
+> *** Warning - bad CRC, using default environment
 > ```
 >
 > **È atteso, non è un guasto.** Le due partizioni dell'environment nascono
 > cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno CRC non
 > valido, e `env_import_redund()` ricade sul default environment e prosegue. Il
 > primo `saveenv` scrive la copia primaria e il messaggio non compare più.
+>
+> Il messaggio è **dedotto dal sorgente, non osservato su hardware**: questo
+> environment non ha ancora girato su una board. `read_env()`
+> (`env/env_blk.c:158-169`) chiude con `return (n == blk_cnt) ? 0 : -1;`, cioè
+> segnala solo un errore di I/O e mai un CRC; una pagina NAND cancellata si
+> rilegge come `0xFF`, quindi entrambe le letture riescono e il ramo che
+> stamperebbe `*** Error - No Valid Environment Area found`
+> (`env/env_blk.c:198-206`) non viene preso. Si arriva a `env_import_redund()`,
+> entrambi i CRC falliscono, `env/common.c:229-231` chiama
+> `set_default_env("!bad CRC")` e quella stampa la riga qui sopra
+> (`env/common.c:73-78`).
+>
+> Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
+> invece di `0xFF`, `read_env()` fallirebbe davvero e comparirebbe
+> `*** Error - No Valid Environment Area found`. È esattamente il genere di cosa
+> che deciderà il primo boot su hardware vero.
 >
 > Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
 > un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,

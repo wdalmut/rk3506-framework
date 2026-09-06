@@ -77,7 +77,36 @@ Anche la riga UUID è identica nelle due varianti:
 Fonte unica: `external/board/lyra-plus/parameter.txt`, riga `CMDLINE`.
 Da lì la GPT (`rkdeveloptool`/`afptool`), da lì la lista partizioni di U-Boot
 (`part_efi`), da lì la stringa `mtdparts=` (`drivers/mtd/mtd_blk.c:381`), da lì
-`/proc/mtd`. Non c'è un secondo posto dove dichiarare una partizione.
+`/proc/mtd`.
+
+Fonte unica non vuol dire copia unica: il layout è **dichiarato in cinque
+posti**. Uno è la fonte, gli altri quattro non possono divergere perché
+qualcosa li genera da lì o li confronta con lì e uccide la build.
+
+| Dove | Cosa dichiara | Come resta allineato |
+|---|---|---|
+| `parameter.txt` | tutto il layout | — è la fonte |
+| `uboot.config`: `CONFIG_ENV_OFFSET`, `CONFIG_ENV_OFFSET_REDUND`, `CONFIG_ENV_SIZE` | solo l'env | **confrontato**: `post-image.sh` blocco 1a legge `include/generated/autoconf.h` (il valore effettivo, non il fragment) e muore se diverge |
+| `linux-mainline.config:199` e `linux-mainline-flash.config:53`: `CONFIG_CMDLINE` | tutto il layout | **confrontato**: `post-image.sh` blocco 2a legge `CONFIG_CMDLINE` dal `.config` generato del kernel, confronta nome/offset/size di ogni partizione nell'ordine di dichiarazione e muore se diverge |
+| `/etc/fw_env.config` | indici e dimensioni di `env`/`env_r` | **generato** da `post-build.sh` |
+| `genimage.cfg` | offset di `uboot`, `boot`, `rootfs` dentro `flash.img` | **generato**: il file committato porta `@OFFSET_<nome>@`, `post-image.sh` (sezione 6) li sostituisce |
+
+I quattro derivati passano tutti da `flash-layout.sh`, che è l'unico parser di
+`parameter.txt` e l'unico posto dove si convertono i settori da 512 B in byte.
+
+Resta **una** trascrizione a mano: `docs/check-artifacts.sh`, sezione 4, cerca i
+magic a 4/8/32 MiB dentro `flash.img` con gli offset scritti nel codice. Non è
+generato di proposito — è un controllo indipendente, e leggerli dalla stessa
+fonte che verifica lo renderebbe circolare — ma va aggiornato a mano se il
+layout cambia.
+
+Perché il blocco 2a serve davvero: sui due defconfig mainline
+`CONFIG_CMDLINE_FORCE=y` fa **ignorare al kernel il bootargs che gli passa
+U-Boot**, quindi sono quelle due stringhe, da sole, a decidere cosa sono
+`/dev/mtd2` e `/dev/mtd3`. `ubi.mtd=rootfs` protegge la root dallo slittamento
+degli indici, ma non protegge `fw_setenv`, che di indici ha bisogno: senza 2a,
+una partizione inserita prima di `env` manderebbe `fw_setenv` a cancellare un
+erase block del volume UBI.
 
 | idx | nome | offset | size | contenuto |
 |---|---|---|---|---|

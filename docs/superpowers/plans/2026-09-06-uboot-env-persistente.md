@@ -21,7 +21,7 @@
 - **Licenza:** ogni file nuovo inizia con `# SPDX-License-Identifier: GPL-2.0-or-later` e `# Copyright (C) 2026 Corley S.r.l.`.
 - **Nessun fork:** ogni delta a U-Boot o al kernel deve essere una patch leggibile in `external/board/lyra-plus/patches/`. Gli SHA nei defconfig non si toccano.
 - **`make savedefconfig` non deve produrre diff** su nessuno dei quattro defconfig (job `defconfig` della CI).
-- **Le due copie nascono cancellate.** Al primo boot dopo il riflash `*** Error - No Valid Environment Area found` e' **atteso**, non un guasto.
+- **Le due copie nascono cancellate.** Al primo boot dopo il riflash `*** Warning - bad CRC, using default environment` e' **atteso**, non un guasto. Il messaggio e' dedotto dal sorgente (`env/env_blk.c:158-169` e `env/common.c:73-78`, :229-231), non osservato su hardware: `read_env()` segnala solo errori di I/O, e una pagina cancellata si rilegge come `0xFF`, quindi il ramo `*** Error - No Valid Environment Area found` non viene preso.
 
 ---
 
@@ -1641,9 +1641,18 @@ Le righe 11-17 elencano gli offset e affermano che fra 20 e 32 MiB "resta un buc
 # env ed env_r NON compaiono fra le partition qui sotto, e non e' una
 # dimenticanza: nascono cancellate, non hanno un'immagine da scrivere. Al
 # primo boot dopo il riflash U-Boot stampa
-#     *** Error - No Valid Environment Area found
+#     *** Warning - bad CRC, using default environment
 # ricade sul default environment e prosegue; il primo saveenv scrive la
 # copia primaria. E' il comportamento atteso.
+#
+# Il messaggio e' DEDOTTO DAL SORGENTE, non osservato su hardware:
+# read_env() (env/env_blk.c:158-169) ritorna 0 se la lettura riesce, senza
+# guardare il CRC, e una pagina NAND cancellata si rilegge come 0xFF, quindi
+# il ramo "*** Error - No Valid Environment Area found"
+# (env/env_blk.c:198-206) NON viene preso: si arriva a env_import_redund(),
+# i due CRC falliscono e set_default_env("!bad CRC") (env/common.c:229-231,
+# :73-78) stampa la riga qui sopra. Se il driver SPI-NAND ritornasse un
+# errore ECC sulle pagine cancellate comparirebbe l'altro messaggio.
 ```
 
 Le righe 35-37 (`Per la stessa ragione le partizioni non dichiarano 'size'...`) restano valide e non si toccano.
@@ -1735,13 +1744,26 @@ Nella sezione che descrive il primo boot dopo il riflash, aggiungi:
 > Al primo boot dopo un riflash U-Boot stampa
 >
 > ```
-> *** Error - No Valid Environment Area found
+> *** Warning - bad CRC, using default environment
 > ```
 >
 > **È atteso, non è un guasto.** Le due partizioni dell'environment nascono
 > cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno CRC non
 > valido, e `env_import_redund()` ricade sul default environment e prosegue. Il
 > primo `saveenv` scrive la copia primaria e il messaggio non compare più.
+>
+> Il messaggio è **dedotto dal sorgente, non osservato su hardware**.
+> `read_env()` (`env/env_blk.c:158-169`) chiude con
+> `return (n == blk_cnt) ? 0 : -1;`: segnala solo errori di I/O, mai un CRC. Una
+> pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe le letture
+> riescono e il ramo che stamperebbe `*** Error - No Valid Environment Area
+> found` (`env/env_blk.c:198-206`) non viene preso; si arriva a
+> `env_import_redund()`, i due CRC falliscono e `set_default_env("!bad CRC")`
+> (`env/common.c:229-231`, :73-78) stampa la riga qui sopra.
+>
+> Caveat: con un driver SPI-NAND che ritorna un errore ECC sulle pagine
+> cancellate invece di `0xFF` comparirebbe l'altro messaggio. Lo deciderà il
+> primo boot vero.
 >
 > Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
 > un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,
@@ -1821,7 +1843,7 @@ mesi: perche' ridondante e non copia singola, perche' ENV_IS_IN_BLK_DEV e
 non ENVF nonostante ENVF sia la strada vendor battuta, perche' due
 partizioni e non una con due offset interni.
 
-Il README dice che 'No Valid Environment Area found' al primo boot e'
+Il README dice che 'bad CRC, using default environment' al primo boot e'
 atteso: senza quella riga sembra un guasto, e si perde un pomeriggio."
 ```
 
@@ -1875,7 +1897,7 @@ Interrompi l'autoboot e, dal prompt di U-Boot:
 => reset
 => printenv pippo
 ```
-Expected: `pippo=1`. Al **primo** `saveenv` dopo il riflash, prima di questo, U-Boot avra' stampato `*** Error - No Valid Environment Area found`: e' atteso (D6 della spec).
+Expected: `pippo=1`. Al **primo** boot dopo il riflash, prima di questo, U-Boot avra' stampato `*** Warning - bad CRC, using default environment`: e' atteso (D6 della spec). Il messaggio e' dedotto dal sorgente, non osservato su hardware: se comparisse invece `*** Error - No Valid Environment Area found`, significa che il driver SPI-NAND ritorna un errore ECC sulle pagine cancellate invece di `0xFF` — annotalo, non e' un guasto nemmeno quello.
 
 - [ ] **Step 5: Criterio 2 — i due lati si vedono**
 
@@ -1904,8 +1926,23 @@ Poi invalida la primaria e verifica che il boot usi la ridondante:
 # flash_erase /dev/mtd2 0 1
 # reboot
 ```
-poi da U-Boot: `printenv pluto` → `pluto=2`, preceduto da
-`*** Warning - some problems detected reading environment; recovered successfully`.
+Expected: **nessun messaggio**. U-Boot non stampa niente, e non e' un
+fallimento del test: `mtd2` cancellata si **rilegge** senza errori di I/O,
+quindi `read_env()` ritorna 0 per entrambe le copie e il ramo
+`*** Warning - some problems detected reading environment; recovered
+successfully` (`env/env_blk.c:198-206`) non viene preso. Si arriva a
+`env_import_redund()`, che con `!crc1_ok && crc2_ok` prende la copia
+ridondante e chiama `env_import(ep, 0)` — con il controllo CRC disabilitato,
+e **in completo silenzio** (`env/common.c`).
+
+La prova che la copia ridondante e' stata usata e' quindi un'altra: da U-Boot
+`printenv pluto` deve rispondere ancora `pluto=2`. Se rispondesse il default
+(o niente), la ridondanza non ha funzionato.
+
+Come secondo segnale, subito dopo: `saveenv`. Scrivera' nella copia
+**primaria** (`gd->env_valid` e' `ENV_REDUND`, e `env_blk_save()` alterna),
+ripristinando l'alternanza fra le due copie; un `hexdump` di `/dev/mtd2` dopo
+il reboot mostra di nuovo un env valido.
 
 Questo e' il test che esercita il rischio 3 della spec: su un chip senza blocchi guasti nell'area env i due percorsi di `get_mtd_blk_map_address()` sono indistinguibili, quindi il caso va provato deliberatamente e non aspettato.
 

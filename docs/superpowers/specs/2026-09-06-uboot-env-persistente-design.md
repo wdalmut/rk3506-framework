@@ -252,10 +252,23 @@ Il rischio di rebase è basso: la serie Rockchip di U-Boot è ferma, e il mirror
 ### D6 — Le due copie nascono cancellate
 
 Non si pre-seeda l'area con `mkenvimage`. Al primo boot dopo il riflash U-Boot
-stampa `*** Error - No Valid Environment Area found`, ricade sul default
+stampa `*** Warning - bad CRC, using default environment`, ricade sul default
 environment e prosegue: `env_blk_load()` legge entrambe le copie, entrambe
 hanno CRC non valido, `env_import_redund()` chiama `set_default_env("!bad CRC")`
-(`env/common.c:230`). Il primo `saveenv` scrive la copia primaria.
+(`env/common.c:229-231`), che stampa quella riga (`env/common.c:73-78`). Il
+primo `saveenv` scrive la copia primaria.
+
+Il messaggio è **dedotto dal sorgente, non osservato su hardware**. Non è
+`*** Error - No Valid Environment Area found`, come diceva una versione
+precedente di questa spec: `read_env()` (`env/env_blk.c:158-169`) termina con
+`return (n == blk_cnt) ? 0 : -1;`, quindi segnala solo un errore di I/O e mai un
+CRC. Una pagina NAND cancellata si rilegge come `0xFF`, entrambe le letture
+riescono, e il ramo `if (read1_fail && read2_fail)` che stamperebbe quel
+messaggio (`env/env_blk.c:198-206`) non viene preso.
+
+Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
+invece di `0xFF`, `read_env()` fallirebbe e comparirebbe l'altro messaggio. Lo
+deciderà il primo boot su hardware.
 
 È il comportamento corretto e va **documentato come atteso**, altrimenti al
 primo boot sembra un guasto. Pre-seedare aggiungerebbe un'immagine `env.img` a
@@ -489,7 +502,7 @@ il file va reso eseguibile per uniformità — decisione da prendere nel piano.
 - `docs/SCELTE-DI-PROGETTO.md`: perché env ridondante e non copia singola;
   perché `ENV_IS_IN_BLK_DEV` e non ENVF; perché due partizioni e non una.
 - `README.md`: tabella delle partizioni nell'output atteso (righe 1025-1043),
-  e il messaggio `No Valid Environment Area found` atteso al primo boot.
+  e il messaggio `bad CRC, using default environment` atteso al primo boot.
 
 ---
 
@@ -507,8 +520,9 @@ il file va reso eseguibile per uniformità — decisione da prendere nel piano.
 Prima di arrivare alla board, la build stessa è un test: se i tre punti
 divergono, `post-image.sh` muore.
 
-**Al primo boot dopo il riflash `*** Error - No Valid Environment Area found`
-è atteso** (D6), non un guasto.
+**Al primo boot dopo il riflash `*** Warning - bad CRC, using default
+environment` è atteso** (D6), non un guasto. Il messaggio è dedotto dal
+sorgente, non osservato su hardware.
 
 ---
 

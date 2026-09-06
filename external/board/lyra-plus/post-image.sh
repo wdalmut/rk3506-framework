@@ -496,11 +496,12 @@ DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 if strings "$DTB" | grep -qE 'ubi\.mtd=[0-9]'; then
 	die "il DTB $DTB_NAME.dtb attacca UBI per INDICE:
         $(strings "$DTB" | grep -oE 'ubi\.mtd=[0-9]+' | head -1)
-    Un DTB di questa board non deve attaccare UBI per indice, nemmeno quando
-    l'indice e' quello giusto: un indice mtd e' la posizione nell'elenco, non
-    una proprieta' della partizione, e il primo che ne inserisce una prima
-    della rootfs manda UBI su un'altra area senza nessun messaggio. Si attacca
-    per nome: ubi.mtd=rootfs.
+    Con le partizioni env/env_r la rootfs e' mtd4, non mtd2: con questo
+    bootargs il kernel attaccherebbe UBI all'area dell'environment.
+    E comunque un DTB di questa board non deve attaccare UBI per indice
+    nemmeno quando l'indice e' giusto: un indice mtd e' la posizione
+    nell'elenco, non una proprieta' della partizione. Si attacca per nome:
+    ubi.mtd=rootfs.
     Quasi sempre significa che la patch al DTS vendor non si e' applicata
     perche' BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION e' cambiato e la
     sottodirectory external/board/lyra-plus/patches/linux/<SHA>/ non

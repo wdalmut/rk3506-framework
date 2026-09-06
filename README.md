@@ -131,6 +131,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
 - [Immagini precompilate](#immagini-precompilate)
 - [Flash](#flash)
 - [Console seriale](#console-seriale)
+- [L'environment U-Boot](#lenvironment-u-boot)
 - [Accesso via USB (adb)](#accesso-via-usb-adb)
 - [Output atteso a boot riuscito](#output-atteso-a-boot-riuscito)
 - [Licenza](#licenza)
@@ -816,6 +817,23 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
+> Al primo boot dopo un riflash U-Boot stampa
+>
+> ```
+> *** Error - No Valid Environment Area found
+> ```
+>
+> **È atteso, non è un guasto.** Le due partizioni dell'environment nascono
+> cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno CRC non
+> valido, e `env_import_redund()` ricade sul default environment e prosegue. Il
+> primo `saveenv` scrive la copia primaria e il messaggio non compare più.
+>
+> Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
+> un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,
+> per evitare un messaggio benigno che si vede una volta sola.
+
+<!-- -->
+
 > #### Se UBI non attacca dopo un riflash
 >
 > Sintomo, sui defconfig con rootfs su flash:
@@ -950,6 +968,34 @@ in bring-up la cmdline non e' fra i sospetti.
 
 ---
 
+## L'environment U-Boot
+
+Persistente e ridondante su due partizioni MTD. Da U-Boot:
+
+```
+=> setenv seriale AB1234
+=> saveenv
+=> reset
+=> printenv seriale
+```
+
+Da Linux, con lo stesso ambiente:
+
+```
+# fw_printenv seriale
+# fw_setenv mac_addr 02:00:00:12:34:56
+```
+
+`/etc/fw_env.config` è **generato** da `parameter.txt` a ogni build: non
+modificarlo a mano, la modifica sparirebbe alla build successiva e nel
+frattempo farebbe scrivere `fw_setenv` nel posto sbagliato.
+
+Il perché di due partizioni invece di un'unica copia, e perché
+`ENV_IS_IN_BLK_DEV` invece di ENVF, è in
+[docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+---
+
 ## Accesso via USB (adb)
 
 Oltre alla seriale la board espone un **gadget USB ADB**, cosi' si puo'
@@ -1030,7 +1076,9 @@ Dopo il banner di U-Boot e i messaggi del kernel, `S99hello` esegue
     dev      size         erasesize    name
     mtd0     4 MiB        128 KiB      uboot
     mtd1     12 MiB       128 KiB      boot
-    mtd2     224 MiB      128 KiB      rootfs
+    mtd2     512 KiB      128 KiB      env
+    mtd3     512 KiB      128 KiB      env_r
+    mtd4     223.375 MiB  128 KiB      rootfs
 
 Welcome to Luckfox Lyra Plus (RK3506G2)
 miranda login:
@@ -1046,9 +1094,11 @@ Le righe che valgono davvero come verifica sono tre:
   instabile. Attenzione pero': **87,1 MiB e' il valore normale su questa
   base**, non un sintomo. Mancano i 32 MiB di CMA riservati al display, che
   sono tenuti apposta — vedi [Display e i 32 MiB di CMA](#display-e-i-32-mib-di-cma).
-- **`mtd0/1/2`** — nomi e dimensioni devono combaciare con `parameter.txt`. Se
-  non c'e' nessuna partizione, `mtdparts=` non e' arrivato al kernel: il DTB e'
-  sbagliato o U-Boot ha sovrascritto il bootargs.
+- **`mtd0`…`mtd4`** — nomi e dimensioni devono combaciare con `parameter.txt`.
+  Se non c'è nessuna partizione, `mtdparts=` non è arrivato al kernel: il DTB
+  è sbagliato o U-Boot ha sovrascritto il bootargs. Se ce ne sono tre invece
+  di cinque, l'immagine è stata costruita prima delle partizioni
+  dell'environment e `fw_setenv` scriverebbe dentro la rootfs.
 
 I valori numerici sopra (MemTotal, uptime, data) sono indicativi; quelli
 misurati su questa board — 128 MiB di DDR, NAND da 256 MiB — stanno nella

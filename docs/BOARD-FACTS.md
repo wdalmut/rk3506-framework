@@ -72,6 +72,32 @@ che il chip è da **256 MiB**.
 Anche la riga UUID è identica nelle due varianti:
 `uuid:rootfs=614e0000-0000-4b53-8000-1d28000054a9`
 
+### Layout MTD
+
+Fonte unica: `external/board/lyra-plus/parameter.txt`, riga `CMDLINE`.
+Da lì la GPT (`rkdeveloptool`/`afptool`), da lì la lista partizioni di U-Boot
+(`part_efi`), da lì la stringa `mtdparts=` (`drivers/mtd/mtd_blk.c:381`), da lì
+`/proc/mtd`. Non c'è un secondo posto dove dichiarare una partizione.
+
+| idx | nome | offset | size | contenuto |
+|---|---|---|---|---|
+| — | *loader/IDB* | 0 | 4 MiB | non dichiarata; `MiniLoaderAll.bin` |
+| `mtd0` | `uboot` | 4 MiB | 4 MiB | `uboot.img` (FIT ×2, 2 MiB ciascuna) |
+| `mtd1` | `boot` | 8 MiB | 12 MiB | `boot.img` (FIT: zImage + fdt + resource) |
+| `mtd2` | `env` | 20 MiB | 512 KiB | environment U-Boot, copia primaria |
+| `mtd3` | `env_r` | 20.5 MiB | 512 KiB | environment U-Boot, copia ridondante |
+| — | *buco* | 21 MiB | 11 MiB | non allocato |
+| `mtd4` | `rootfs` | 32 MiB | `grow` → `0xdf60000` | UBI |
+
+**Gli indici sono slittati** rispetto alle versioni fino alla v0.2.0: `rootfs`
+era `mtd2`. Ogni punto che cablava un indice è stato convertito al nome
+(`ubi.mtd=rootfs`), tranne `/etc/fw_env.config`, che di indici ha bisogno e per
+questo è **generato** da `parameter.txt` invece che scritto a mano.
+
+L'environment occupa un erase block (128 KiB) dentro una partizione di quattro:
+gli altri tre sono riserva per lo skip dei blocchi guasti. Sull'esemplare
+misurato ci sono 2 blocchi guasti su 1792.
+
 ### UART di debug
 
 Fonte: `$SDK/kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dts` riga 15

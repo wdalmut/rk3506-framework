@@ -817,32 +817,44 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
-> Al primo boot dopo un riflash U-Boot stampa
+> Al primo boot dopo un riflash U-Boot stampa due righe, non una:
 >
 > ```
 > *** Warning - bad CRC, using default environment
+> *** Environment invalid, writing default to flash
 > ```
 >
-> **È atteso, non è un guasto.** Le due partizioni dell'environment nascono
-> cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno CRC non
-> valido, e `env_import_redund()` ricade sul default environment e prosegue. Il
-> primo `saveenv` scrive la copia primaria e il messaggio non compare più.
+> **Sono entrambe attese, non un guasto.** Le due partizioni dell'environment
+> nascono cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno
+> CRC non valido, `env_import_redund()` ricade sul default environment (prima
+> riga) e lo scrive subito su una delle due copie (seconda riga) — senza
+> aspettare un `saveenv` esplicito. Al boot successivo nessuna delle due righe
+> compare più, perché la copia appena scritta ha un CRC valido.
 >
-> Il messaggio è **dedotto dal sorgente, non osservato su hardware**: questo
-> environment non ha ancora girato su una board. `read_env()`
-> (`env/env_blk.c:158-169`) chiude con `return (n == blk_cnt) ? 0 : -1;`, cioè
-> segnala solo un errore di I/O e mai un CRC; una pagina NAND cancellata si
-> rilegge come `0xFF`, quindi entrambe le letture riescono e il ramo che
-> stamperebbe `*** Error - No Valid Environment Area found`
-> (`env/env_blk.c:198-206`) non viene preso. Si arriva a `env_import_redund()`,
-> entrambi i CRC falliscono, `env/common.c:229-231` chiama
-> `set_default_env("!bad CRC")` e quella stampa la riga qui sopra
-> (`env/common.c:73-78`).
+> U-Boot scrive senza che nessuno gliel'abbia chiesto perché un environment
+> non valido non deve arrivare fino allo spazio utente: è lì che `fw_setenv`
+> lo trasformerebbe in una scheda che non parte (vedi [L'environment
+> U-Boot](#lenvironment-u-boot) più sotto).
+>
+> Entrambe le righe, e l'ordine in cui compaiono, sono **dedotte dal
+> sorgente, non osservate su hardware**: questo environment non ha ancora
+> girato su una board. `read_env()` (`env/env_blk.c:158-169`) chiude con
+> `return (n == blk_cnt) ? 0 : -1;`, cioè segnala solo un errore di I/O e mai
+> un CRC; una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe
+> le letture riescono e il ramo che stamperebbe `*** Error - No Valid
+> Environment Area found` (`env/env_blk.c:198-206`) non viene preso. Si
+> arriva a `env_import_redund()`, entrambi i CRC falliscono,
+> `env/common.c:229-231` chiama `set_default_env("!bad CRC")`, che stampa la
+> prima riga (`env/common.c:73-78`) e alza `GD_FLG_ENV_DEFAULT`; è quel flag
+> che `env_blk_repair()` (`env/env_blk.c`) rileva per scrivere il default in
+> flash e stampare la seconda riga.
 >
 > Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
 > invece di `0xFF`, `read_env()` fallirebbe davvero e comparirebbe
-> `*** Error - No Valid Environment Area found`. È esattamente il genere di cosa
-> che deciderà il primo boot su hardware vero.
+> `*** Error - No Valid Environment Area found` al posto della prima riga. La
+> seconda comparirebbe comunque, perché anche quel percorso alza lo stesso
+> flag. È esattamente il genere di cosa che deciderà il primo boot su
+> hardware vero.
 >
 > Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
 > un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,
@@ -1006,9 +1018,34 @@ Da Linux, con lo stesso ambiente:
 modificarlo a mano, la modifica sparirebbe alla build successiva e nel
 frattempo farebbe scrivere `fw_setenv` nel posto sbagliato.
 
+`fw_setenv` da Linux è sicuro anche come prima scrittura dopo un riflash,
+quando le due copie nascono con CRC non valido: U-Boot ripara un environment
+non valido al caricamento, prima che Linux esista, quindi `fw_setenv` non
+incontra mai un CRC non valido su cui innescarsi — trova sempre un
+environment già valido, il proprio o il default appena scritto dalla
+riparazione. Non è una cautela da ricordare quando si usa `fw_setenv`: è la
+sequenza con cui il sistema arriva alla shell.
+
 Il perché di due partizioni invece di un'unica copia, e perché
 `ENV_IS_IN_BLK_DEV` invece di ENVF, è in
 [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+### Riportare l'environment allo stato di fabbrica
+
+```
+# flash_erase /dev/mtd2 0 0
+# flash_erase /dev/mtd3 0 0
+# reboot
+```
+
+Al boot successivo U-Boot trova entrambe le copie non valide e riscrive il
+default compilato, annunciandolo sulla seriale.
+
+**`update.img` non tocca l'environment**, ed è voluto: il `package-file`
+elenca `parameter`, `bootloader`, `uboot`, `boot` e `rootfs`, quindi un
+riflash lascia intatti MAC address, numero di serie e calibrazioni. Un
+aggiornamento firmware che li cancellasse sarebbe un difetto, non un
+ripristino — per azzerarli serve il gesto esplicito qui sopra.
 
 ---
 

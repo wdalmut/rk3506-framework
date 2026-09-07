@@ -127,6 +127,49 @@ L'environment occupa un erase block (128 KiB) dentro una partizione di quattro:
 gli altri tre sono riserva per lo skip dei blocchi guasti. Sull'esemplare
 misurato ci sono 2 blocchi guasti su 1792.
 
+### `fw_setenv` su un CRC non valido
+
+Non e' un dettaglio di questa patch: e' un comportamento di `uboot-tools`,
+verificabile su qualunque binario `fw_setenv`/`fw_printenv` a prescindere
+dalla board, e per questo appartiene qui invece che al design del 2026-09-07.
+
+Fonte: `tools/env/fw_env.c`, funzione `fw_env_open()`. Sia nel ramo senza
+ridondanza sia in quello ridondante, quando il CRC letto non torna, il codice
+non si limita a rifiutare l'operazione:
+
+```c
+fprintf (stderr,
+        "Warning: Bad CRC, using default environment\n");
+memcpy(environment.data, default_environment, sizeof default_environment);
+```
+
+Stampa l'avviso e **sostituisce l'intero ambiente in memoria** con
+`default_environment` — il default compilato dentro `fw_env` stesso, quello
+di `uboot-tools`, non quello di questa U-Boot — prima di applicarci la
+modifica richiesta e scriverlo in flash. Un `fw_setenv bootdelay 3` lanciato
+su un environment con CRC non valido non imposta solo `bootdelay`: semina
+tutto il resto con un ambiente estraneo.
+
+Il contenuto di quel default e' verificabile sul target, senza bisogno di
+leggere il sorgente:
+
+```
+$ strings /usr/sbin/fw_printenv | grep '^bootcmd='
+bootcmd=bootp; setenv bootargs root=/dev/nfs nfsroot=${serverip}:${rootpath} ip=...; bootm
+```
+
+Boot di rete via BOOTP e NFS. Nello stesso binario installato su questa board,
+`boot_android`, `bootrkp` e `boot_fit` — i comandi che avviano davvero questa
+board — compaiono **zero volte**: `strings usr/sbin/fw_printenv | grep -c
+'boot_android\|bootrkp\|boot_fit'` da' `0`.
+
+Su questa board la trappola e' disinnescata prima che possa scattare: U-Boot
+ripara un environment non valido al caricamento, prima che Linux esista e
+quindi prima che `fw_setenv` possa vederlo. Il meccanismo e' descritto in
+[docs/superpowers/specs/2026-09-07-env-vergine-autoriparazione-design.md](superpowers/specs/2026-09-07-env-vergine-autoriparazione-design.md).
+Chi lavora su un'altra board Rockchip con lo stesso `fw_setenv` e senza quella
+riparazione trova la trappola intera.
+
 ### UART di debug
 
 Fonte: `$SDK/kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dts` riga 15

@@ -4,7 +4,7 @@
 
 **Goal:** far sì che U-Boot riscriva l'environment quando lo trova non valido, così che lo stato vergine non sopravviva fino allo spazio utente, dove `fw_setenv` lo trasformerebbe in una scheda che non parte.
 
-**Architecture:** una funzione statica in `env/env_blk.c`, chiamata da entrambi i rami di `env_blk_load()`, che riconosce dal flag `GD_FLG_ENV_DEFAULT` che l'ambiente in memoria è il default compilato — cioè che nessuna delle due copie era usabile — stampa una riga e chiama `env_save()`. Nessun artefatto nuovo, nessun cambio a `update.img` o a `parameter.txt`. Il resto del piano corregge i documenti che descrivevano il vecchio comportamento, compresa la procedura di accettazione che conteneva essa stessa la trappola.
+**Architecture:** una funzione statica in `env/env_blk.c`, chiamata da entrambi i rami di `env_blk_load()`, che riconosce dal flag `GD_FLG_ENV_DEFAULT` che l'ambiente in memoria è il default compilato — cioè che nessuna delle due copie era usabile — stampa una riga e chiama `env_save()`. Perché quella lettura significhi qualcosa, `env_blk_load()` azzera il flag in testa a entrambi i rami: il flag è un latch con due setter e nessun clearer, e `initr_env_nowhere()` lo alza prima che qualunque driver di environment giri. Nessun artefatto nuovo, nessun cambio a `update.img` o a `parameter.txt`. Il resto del piano corregge i documenti che descrivevano il vecchio comportamento, compresa la procedura di accettazione che conteneva essa stessa la trappola.
 
 **Tech Stack:** U-Boot 2017.09 Rockchip (SHA `1625f78b6dcf9fe401d447da79132b7bc6804538`), Buildroot 2026.02.3, Docker per la build.
 
@@ -12,8 +12,9 @@
 
 ## Global Constraints
 
-- **Il rilevatore è `gd->flags & GD_FLG_ENV_DEFAULT`** (`include/asm-generic/global_data.h:180`, alzato da `set_default_env()` a `env/common.c:92`). Copre sia il CRC non valido su entrambe le copie sia l'errore di I/O; il valore di ritorno di `env_blk_load()` no.
-- **Si salva una copia sola.** `env_save()` → `env_blk_save()`, una chiamata. Non tentare di scriverle entrambe: partendo da uno stato invalido due chiamate consecutive scrivono due volte la primaria (`env/env_blk.c:126-127` e `:148`).
+- **Il rilevatore è `gd->flags & GD_FLG_ENV_DEFAULT`** (`include/asm-generic/global_data.h:180`). Copre sia il CRC non valido su entrambe le copie sia l'errore di I/O; il valore di ritorno di `env_blk_load()` no.
+- **Il flag va azzerato in testa a `env_blk_load()`, in entrambi i rami.** Non è un dettaglio: è un latch con **due** setter — `set_default_env()` (`env/common.c:92`) e `set_board_env(..., ready=true)` (`env/common.c:119-120`) — e **nessuno** che lo azzeri. Con `CONFIG_USING_KERNEL_DTB=y` e `CONFIG_ENV_IS_NOWHERE` non definito, `initr_env_nowhere()` passa dal secondo (`common/board_r.c:537`) e in `init_sequence_r` sta prima di `initr_env_switch`, cioè del percorso che arriva a `env_blk_load()`. Senza l'azzeramento la riparazione scatta a **ogni** boot, anche su una scheda sana. La riga porta un commento che spiega perché non è ridondante.
+- **Si salva una copia sola.** `env_save()` → `env_blk_save()`, una chiamata. Da questo stato `gd->env_valid` vale `ENV_VALID` (`env_blk` non dichiara `.init`, quindi `env_init()` lo imposta così — `env/env.c:138-142` — e il ramo «entrambi i CRC non validi» di `env_import_redund()` non lo tocca — `env/common.c:229-231`), quindi `env_blk_save()` sceglie `copy = 1` e scrive la copia **ridondante** (`mtd3`, `0x1480000`). È ciò che farebbe un `saveenv` manuale; la primaria si riempie al salvataggio successivo. Non tentare di scriverle entrambe: richiederebbe di duplicare fuori da `env_blk_save()` la logica di alternanza su `gd->env_valid` (`env/env_blk.c:126-127` e `:148`).
 - **La riga stampata è esattamente:** `*** Environment invalid, writing default to flash`
 - **Un salvataggio fallito non è fatale:** si stampa l'errore e si prosegue con l'ambiente in RAM.
 - **La riparazione scatta solo se ENTRAMBE le copie sono inutilizzabili.** Con una sola copia cancellata, `env_import_redund()` usa l'altra e non alza il flag: nessuna riparazione. È voluto — è ciò che rende ancora valido il criterio 3 del piano precedente.
@@ -91,7 +92,7 @@ else
 	echo "FAIL nm o env/env_blk.o non trovati"; fail=1
 fi
 
-# 3. Le tre patch precedenti restano applicate: nessuna regressione.
+# 3. Le sei patch precedenti restano applicate: nessuna regressione.
 n="$(grep -c 'patches/uboot/000[1-6]-' "$U/.applied_patches_list" 2>/dev/null || echo 0)"
 check "sei patch U-Boot applicate" "$n" "6"
 
@@ -102,6 +103,11 @@ else
 	echo "FAIL la 0007 non risulta applicata"; fail=1
 fi
 
+# 5. L'azzeramento del flag c'e' in ENTRAMBI i rami di env_blk_load(): senza,
+#    la riparazione scatta a ogni boot invece che sul solo env non valido.
+n="$(grep -c 'gd->flags &= ~GD_FLG_ENV_DEFAULT;' "$U/env/env_blk.c" 2>/dev/null || echo 0)"
+check "GD_FLG_ENV_DEFAULT azzerato in entrambi i rami" "$n" "2"
+
 exit $fail
 ```
 
@@ -109,7 +115,7 @@ exit $fail
 
 Run: `bash /tmp/test-env-repair.sh`
 
-Expected: FAIL sui controlli 1, 2 e 4; il controllo 3 passa (sei patch, `0001`…`0006`). Oggi `env_blk.o` non referenzia `env_save` e la stringa non esiste.
+Expected: FAIL sui controlli 1, 2, 4 e 5; il controllo 3 passa (sei patch, `0001`…`0006`). Oggi `env_blk.o` non referenzia `env_save`, la stringa non esiste e il flag non viene azzerato.
 
 - [ ] **Step 3: Prepara le copie per il diff**
 
@@ -146,15 +152,34 @@ Inserisci fra le due, separata da righe vuote:
  *
  * Si ripara qui, al primo boot, prima che Linux esista.
  *
- * GD_FLG_ENV_DEFAULT lo alza set_default_env(), che e' l'unico modo in cui
- * l'ambiente in memoria puo' essere il default compilato: sia per CRC non
- * valido su entrambe le copie (via env_import_redund) sia per errore di I/O.
- * Il valore di ritorno di env_blk_load() non distingue i due casi.
+ * Il rilevatore e' GD_FLG_ENV_DEFAULT: copre sia il CRC non valido su entrambe
+ * le copie (via env_import_redund) sia l'errore di I/O, che il valore di
+ * ritorno di env_blk_load() non distingue -- nel primo caso
+ * env_import_redund() ritorna 0.
  *
- * Si scrive UNA copia, come farebbe un saveenv manuale: basta a rendere l'env
- * valido, e la seconda si riempie al salvataggio successivo. Due chiamate
- * consecutive non scriverebbero una copia per parte, perche' env_blk_save()
- * alterna in base a gd->env_valid partendo da uno stato invalido.
+ * ATTENZIONE: quel flag e' un latch, non uno stato. Ha DUE setter --
+ * set_default_env() (env/common.c:92) e set_board_env(..., ready=true)
+ * (env/common.c:119-120) -- e nessuno che lo azzeri. initr_env_nowhere() usa
+ * il secondo (common/board_r.c:537, ramo #else con CONFIG_ENV_IS_NOWHERE non
+ * definito) e in init_sequence_r viene prima di initr_env_switch, che e' il
+ * percorso che porta fin qui. Al nostro arrivo il flag e' quindi gia' alzato
+ * anche con un environment perfettamente sano. E' per questo che
+ * env_blk_load() lo azzera in testa: solo cosi' qui significa "alzato durante
+ * QUESTO caricamento". Senza quell'azzeramento questa funzione scriverebbe la
+ * flash a ogni boot.
+ *
+ * Si scrive UNA copia, che e' esattamente cio' che farebbe un saveenv manuale
+ * partendo da questo stato. env_blk_save() sceglie con
+ * copy = (gd->env_valid == ENV_VALID) (env/env_blk.c:126-127), e qui
+ * gd->env_valid vale ENV_VALID: env_init() lo mette cosi' perche' env_blk non
+ * dichiara .init (env/env.c:138-142), e il ramo "entrambi i CRC non validi" di
+ * env_import_redund() non lo tocca (env/common.c:229-231). Si scrive dunque la
+ * copia RIDONDANTE; la primaria si riempie al salvataggio successivo.
+ *
+ * env_blk_save() stampa una riga sua, "Writing to redundant <NULL>(<NULL>)...
+ * done": i <NULL> sono devtype e devnum, che set_default_env() ha appena tolto
+ * dall'hashtable. E' atteso e innocuo -- lib/vsprintf.c stampa "<NULL>" per i
+ * puntatori nulli.
  */
 static __maybe_unused void env_blk_repair(void)
 {
@@ -171,9 +196,36 @@ static __maybe_unused void env_blk_repair(void)
 }
 ```
 
-- [ ] **Step 5: Chiamala da entrambi i rami**
+- [ ] **Step 5: Azzera il flag in testa a entrambi i rami, poi chiamala in fondo a entrambi**
 
-Nel ramo **con** ridondanza, la fine di `env_blk_load()` nel file pristino è:
+**L'azzeramento non è opzionale.** `GD_FLG_ENV_DEFAULT` è un latch con due
+setter e nessun clearer, e `initr_env_nowhere()` lo alza prima che qualunque
+driver di environment giri: senza azzerarlo, la lettura in fondo è sempre vera
+e la riparazione riscrive la flash a ogni boot. Va inserito **prima delle
+letture**, subito dopo le dichiarazioni, in tutti e due i rami, con il
+commento che ne spiega la ragione — altrimenti sembra una riga morta:
+
+```c
+	/*
+	 * GD_FLG_ENV_DEFAULT e' un latch con due setter e nessuno che lo
+	 * azzeri, e initr_env_nowhere() lo alza prima che qualunque driver di
+	 * environment giri (common/board_r.c:537 -> env/common.c:119-120).
+	 * Azzerandolo qui, in fondo alla funzione il flag significa "alzato
+	 * durante QUESTO caricamento", che e' la condizione che interessa a
+	 * env_blk_repair(). Senza, la riparazione scatterebbe a ogni boot
+	 * anche con un environment sano: vedi il commento su env_blk_repair().
+	 * Non e' una riga ridondante, non toglierla.
+	 */
+	gd->flags &= ~GD_FLG_ENV_DEFAULT;
+```
+
+Nel ramo **con** ridondanza va subito dopo i due
+`ALLOC_CACHE_ALIGN_BUFFER(env_t, tmp_env…, 1);` e prima di
+`blk_desc = rockchip_get_bootdev();`. Nel ramo **senza** ridondanza va dopo
+`u32 offset; int ret;`, sempre prima di `blk_desc = rockchip_get_bootdev();`.
+
+Poi le chiamate in fondo. Nel ramo **con** ridondanza, la fine di
+`env_blk_load()` nel file pristino è:
 
 ```c
 fini:
@@ -266,16 +318,34 @@ reset in loop. Osservato su hardware il 2026-09-06.
 La riparazione va fatta qui, al primo boot, prima che Linux esista e quindi
 prima che qualcuno possa lanciare fw_setenv.
 
-Il rilevatore e' GD_FLG_ENV_DEFAULT, che alza set_default_env(): e' l'unico
-modo in cui l'ambiente in memoria puo' essere il default compilato, e copre
-sia il CRC non valido su entrambe le copie (via env_import_redund) sia
-l'errore di I/O. Il valore di ritorno di env_blk_load() non li distingue,
-perche' nel primo caso env_import_redund() ritorna 0.
+Il rilevatore e' GD_FLG_ENV_DEFAULT, che copre sia il CRC non valido su
+entrambe le copie (via env_import_redund) sia l'errore di I/O. Il valore di
+ritorno di env_blk_load() non li distingue, perche' nel primo caso
+env_import_redund() ritorna 0.
 
-Si scrive una copia sola, come farebbe un saveenv manuale. Due chiamate
-consecutive non scriverebbero una copia per parte: env_blk_save() sceglie con
-copy = (gd->env_valid == ENV_VALID) e partendo da uno stato invalido
-riscriverebbe due volte la primaria.
+Il flag pero' non si puo' leggere cosi' com'e': e' un latch con DUE setter --
+set_default_env() (env/common.c:92) e set_board_env(..., ready=true)
+(env/common.c:119-120) -- e nessuno che lo azzeri. Su questa configurazione
+initr_env_nowhere() usa il secondo (CONFIG_USING_KERNEL_DTB=y e
+CONFIG_ENV_IS_NOWHERE non definito, common/board_r.c:537) e in
+init_sequence_r sta prima di initr_env_switch, che e' il percorso che arriva
+a env_blk_load(). Il flag e' quindi gia' alzato all'ingresso anche con un
+environment perfettamente sano. Per questo env_blk_load() lo azzera in testa,
+in entrambi i rami: solo cosi' la lettura in fondo significa "alzato durante
+questo caricamento", e la riparazione non scatta a ogni boot facendo una
+erase+program di un blocco SPI NAND su una scheda che non ne ha bisogno.
+
+Si scrive una copia sola, che e' esattamente cio' che farebbe un saveenv
+manuale partendo da questo stato: gd->env_valid vale ENV_VALID (env_blk non
+dichiara .init, quindi env_init() lo imposta cosi', env/env.c:138-142, e il
+ramo "entrambi i CRC non validi" di env_import_redund() non lo tocca,
+env/common.c:229-231), percio' env_blk_save() sceglie copy = 1 e scrive la
+copia ridondante. La primaria si riempie al salvataggio successivo.
+
+env_blk_save() stampa anche la propria riga "Writing to redundant
+<NULL>(<NULL>)... done": devtype e devnum non ci sono piu' perche'
+set_default_env() ha appena sostituito l'hashtable. E' atteso, e vsprintf
+gestisce i puntatori nulli.
 
 Un salvataggio fallito stampa e prosegue con l'ambiente in RAM: una flash che
 non si lascia scrivere e' un problema piu' grande di questo, e il boot non
@@ -302,7 +372,7 @@ Expected: nella traccia compare `Applying 0007-env-blk-repair-...patch` senza `F
 
 Run: `bash /tmp/test-env-repair.sh`
 
-Expected: PASS, quattro righe `ok`. In particolare `nm env/env_blk.o` mostra ` U env_save`, che è la prova a livello di compilazione che la chiamata esiste davvero e non è stata eliminata.
+Expected: PASS, cinque righe `ok`. In particolare `nm env/env_blk.o` mostra ` U env_save`, che è la prova a livello di compilazione che la chiamata esiste davvero e non è stata eliminata, e il controllo 5 prova che l'azzeramento del flag è arrivato nell'albero estratto in entrambi i rami.
 
 - [ ] **Step 9: Verifica che non ci siano regressioni sull'env**
 
@@ -332,9 +402,15 @@ Si ripara al caricamento, prima che Linux esista e quindi prima che
 qualcuno possa lanciare fw_setenv. Il rilevatore e' GD_FLG_ENV_DEFAULT, che
 copre sia il CRC non valido su entrambe le copie sia l'errore di I/O.
 
-Una copia sola, come un saveenv manuale, e una riga stampata: la scrittura
-in flash al primo boot e' un effetto collaterale che nessuno ha chiesto, e
-chi guarda la seriale ha diritto di vederlo."
+Il flag va azzerato in testa a env_blk_load(): e' un latch con due setter e
+nessun clearer, e initr_env_nowhere() lo alza prima che qualunque driver di
+environment giri. Senza l'azzeramento la riparazione scatta a ogni boot.
+
+Una copia sola, come un saveenv manuale da questo stato: gd->env_valid vale
+ENV_VALID, quindi env_blk_save() sceglie copy = 1 e scrive la copia
+ridondante; la primaria si riempie al salvataggio successivo. E una riga
+stampata: la scrittura in flash al primo boot e' un effetto collaterale che
+nessuno ha chiesto, e chi guarda la seriale ha diritto di vederlo."
 ```
 
 ---
@@ -562,7 +638,17 @@ Da Linux, sulla scheda:
 # reboot
 ```
 
-Expected: U-Boot stampa `*** Environment invalid, writing default to flash`. Interrompi l'autoboot e verifica che l'ambiente sia quello giusto:
+Expected: **tre** righe, non una — la terza la stampa `env_blk_save()`, che non è silenzioso:
+
+```
+*** Warning - bad CRC, using default environment
+*** Environment invalid, writing default to flash
+Writing to redundant <NULL>(<NULL>)... done
+```
+
+I `<NULL>` sono attesi: sono `devtype` e `devnum`, che `set_default_env()` ha appena tolto dall'hashtable un istante prima della riparazione, e `boot_devtype_init()` non li rimette perché è già stata chiamata. Non è un guasto e non c'è niente da correggere. La parola `redundant` conferma che è la copia di `mtd3` a essere stata scritta.
+
+Interrompi l'autoboot e verifica che l'ambiente sia quello giusto:
 ```
 => printenv bootcmd
 ```
@@ -606,7 +692,7 @@ poi da Linux:
 # hexdump -C /dev/mtd3 | head -2
 ```
 
-Expected: entrambe iniziano con un CRC32 seguito dal byte `flags`, e i due `flags` differiscono. Prima di questo `saveenv` la sola `mtd2` era valida: la riparazione scrive una copia sola, di proposito.
+Expected: entrambe iniziano con un CRC32 seguito dal byte `flags`, e i due `flags` differiscono. **Prima** di questo `saveenv` la sola valida era `mtd3`, non `mtd2`: la riparazione scrive una copia sola, di proposito, e da quello stato `env_blk_save()` sceglie la **ridondante** (`gd->env_valid` vale `ENV_VALID`, quindi `copy = 1`). Se prima del `saveenv` fai un `hexdump` e trovi `/dev/mtd2` ancora tutta `0xFF`, è il comportamento atteso, non un guasto: guarda `/dev/mtd3`.
 
 - [ ] **Step 7: Riporta cosa hai visto**
 
@@ -620,8 +706,8 @@ Se una delle righe attese non compare, o ne compare una che non è prevista, rip
 
 | Sezione della spec | Task |
 |---|---|
-| Il rilevatore `GD_FLG_ENV_DEFAULT` | 1 |
-| Scrive una copia sola, con il motivo | 1 |
+| Il rilevatore `GD_FLG_ENV_DEFAULT`, azzerato in testa a `env_blk_load()` | 1 |
+| Scrive una copia sola (la **ridondante**), con il motivo | 1 |
 | La riga stampata | 1 |
 | Salvataggio fallito non fatale | 1 |
 | Il ramo `#else` senza ridondanza — *domanda lasciata aperta dalla spec* | 1, Step 5: si copre, costa una riga, e la funzione è condivisa |

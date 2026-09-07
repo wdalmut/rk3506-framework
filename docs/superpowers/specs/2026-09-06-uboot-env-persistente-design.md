@@ -259,8 +259,12 @@ Non si pre-seeda l'area con `mkenvimage`. Al primo boot dopo il riflash U-Boot
 stampa `*** Warning - bad CRC, using default environment`, ricade sul default
 environment e prosegue: `env_blk_load()` legge entrambe le copie, entrambe
 hanno CRC non valido, `env_import_redund()` chiama `set_default_env("!bad CRC")`
-(`env/common.c:229-231`), che stampa quella riga (`env/common.c:73-78`). Il
-primo `saveenv` scrive la copia primaria.
+(`env/common.c:229-231`), che stampa quella riga (`env/common.c:73-78`). A quel
+punto la riparazione descritta più sotto scrive **subito** una copia, senza
+aspettare un `saveenv`: e per come `env_blk_save()` sceglie la copia
+(`copy = (gd->env_valid == ENV_VALID)`, e da questo stato `gd->env_valid` vale
+`ENV_VALID`) quella copia è la **ridondante**, `mtd3`. La primaria, `mtd2`,
+resta cancellata fino al primo `saveenv` successivo.
 
 **La motivazione originale era sbagliata, ed è stata falsificata su hardware
 il 2026-09-06.** Diceva che lo stato vergine costava solo «un messaggio di

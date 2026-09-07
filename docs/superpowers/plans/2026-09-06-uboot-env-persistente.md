@@ -1640,14 +1640,17 @@ Le righe 11-17 elencano gli offset e affermano che fra 20 e 32 MiB "resta un buc
 #
 # env ed env_r NON compaiono fra le partition qui sotto, e non e' una
 # dimenticanza: nascono cancellate, non hanno un'immagine da scrivere. Al
-# primo boot dopo il riflash U-Boot stampa due righe, non una:
+# primo boot dopo il riflash U-Boot stampa tre righe, non una:
 #     *** Warning - bad CRC, using default environment
 #     *** Environment invalid, writing default to flash
-# ricade sul default environment e lo scrive subito su una delle due copie,
-# senza aspettare un saveenv esplicito. Al boot successivo nessuna delle due
-# righe compare piu'. E' il comportamento atteso.
+#     Writing to redundant <NULL>(<NULL>)... done
+# ricade sul default environment e lo scrive subito su una delle due copie --
+# la ridondante, mtd3 -- senza aspettare un saveenv esplicito. La terza riga
+# la stampa env_blk_save(), e i <NULL> sono devtype e devnum, che
+# set_default_env() ha appena tolto dall'hashtable: e' atteso. Al boot
+# successivo nessuna delle tre righe compare piu'.
 #
-# Le due righe sono DEDOTTE DAL SORGENTE, non osservate su hardware:
+# Le tre righe sono DEDOTTE DAL SORGENTE, non osservate su hardware:
 # read_env() (env/env_blk.c:158-169) ritorna 0 se la lettura riesce, senza
 # guardare il CRC, e una pagina NAND cancellata si rilegge come 0xFF, quindi
 # il ramo "*** Error - No Valid Environment Area found"
@@ -1746,22 +1749,27 @@ Aggiungi anche il perché delle patch ai file core invece che al board header: c
 Nella sezione che descrive il primo boot dopo il riflash, aggiungi:
 
 ````markdown
-> Al primo boot dopo un riflash U-Boot stampa due righe, non una:
+> Al primo boot dopo un riflash U-Boot stampa **tre** righe, non una:
 >
 > ```
 > *** Warning - bad CRC, using default environment
 > *** Environment invalid, writing default to flash
+> Writing to redundant <NULL>(<NULL>)... done
 > ```
 >
-> **Sono entrambe attese, non un guasto.** Le due partizioni dell'environment
-> nascono cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno
-> CRC non valido, `env_import_redund()` ricade sul default environment (prima
-> riga) e lo scrive subito su una delle due copie (seconda riga), senza
-> aspettare un `saveenv` esplicito.
+> **Sono tutte e tre attese, non un guasto.** Le due partizioni
+> dell'environment nascono cancellate: `env_blk_load()` legge entrambe le
+> copie, entrambe hanno CRC non valido, `env_import_redund()` ricade sul
+> default environment (prima riga) e lo scrive subito su una delle due copie
+> (seconda riga), senza aspettare un `saveenv` esplicito. La terza riga la
+> stampa `env_blk_save()` (`env/env_blk.c:135-136`); i `<NULL>` sono `devtype`
+> e `devnum`, che `set_default_env()` ha appena tolto dall'hashtable, e
+> `lib/vsprintf.c` li rende così. La parola `redundant` dice che è stata
+> scritta `mtd3`.
 >
-> Entrambe le righe, l'ordine in cui compaiono e il fatto che al boot
-> successivo nessuna delle due compaia più sono **dedotti dal sorgente, non
-> osservati su hardware**. `read_env()` (`env/env_blk.c:158-169`) chiude con
+> Le tre righe, l'ordine in cui compaiono e il fatto che al boot successivo
+> nessuna compaia più sono **dedotti dal sorgente, non osservati su
+> hardware**. `read_env()` (`env/env_blk.c:158-169`) chiude con
 > `return (n == blk_cnt) ? 0 : -1;`: segnala solo errori di I/O, mai un CRC.
 > Una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe le
 > letture riescono e il ramo che stamperebbe `*** Error - No Valid
@@ -1919,14 +1927,15 @@ Interrompi l'autoboot e, dal prompt di U-Boot:
 => reset
 => printenv pippo
 ```
-Expected: `pippo=1`. Al **primo** boot dopo il riflash, prima di questo, U-Boot avrà stampato due righe, non una:
+Expected: `pippo=1`. Al **primo** boot dopo il riflash, prima di questo, U-Boot avrà stampato **tre** righe, non una:
 
 ```
 *** Warning - bad CRC, using default environment
 *** Environment invalid, writing default to flash
+Writing to redundant <NULL>(<NULL>)... done
 ```
 
-Entrambe sono attese (D6 della spec): la prima segnala il CRC non valido su entrambe le copie, la seconda è la riparazione che le rende valide scrivendo il default su una delle due. Al **secondo** boot nessuna delle due compare più, perché la copia appena scritta ha un CRC valido. Entrambe le righe, e la sequenza in cui compaiono, sono dedotte dal sorgente, non osservate su hardware: la presenza della riga di riparazione è un fatto del codice sorgente, ma nessun boot reale ha ancora attraversato questo percorso, quindi né l'ordine né la compresenza delle due righe sono confermati. Se comparisse invece `*** Error - No Valid Environment Area found`, significa che il driver SPI-NAND ritorna un errore ECC sulle pagine cancellate invece di `0xFF` — annotalo, non è un guasto nemmeno quello, e la riga di riparazione compare comunque, perché quel percorso alza lo stesso flag (`GD_FLG_ENV_DEFAULT`).
+Sono tutte e tre attese (D6 della spec): la prima segnala il CRC non valido su entrambe le copie, la seconda è la riparazione che le rende valide scrivendo il default su una delle due, la terza la stampa `env_blk_save()`, che non è silenzioso (`env/env_blk.c:135-136`). I `<NULL>` della terza riga sono `devtype` e `devnum`: `set_default_env()` ha appena sostituito l'intera hashtable, portandosi via i valori che `rockchip_get_bootdev()` vi aveva messo, e `boot_devtype_init()` non li rimette perché è già stata chiamata una volta; `lib/vsprintf.c` stampa `<NULL>` per i puntatori nulli, non c'è nessun crash e non c'è niente da correggere. La parola `redundant` dice quale copia è stata scritta: `mtd3`. Al **secondo** boot nessuna delle tre compare più, perché la copia appena scritta ha un CRC valido. Le tre righe, e la sequenza in cui compaiono, sono dedotte dal sorgente, non osservate su hardware: la presenza della riga di riparazione è un fatto del codice sorgente, ma nessun boot reale ha ancora attraversato questo percorso, quindi né l'ordine né la compresenza delle righe sono confermati. Se comparisse invece `*** Error - No Valid Environment Area found`, significa che il driver SPI-NAND ritorna un errore ECC sulle pagine cancellate invece di `0xFF` — annotalo, non è un guasto nemmeno quello, e la riga di riparazione compare comunque, perché quel percorso alza lo stesso flag (`GD_FLG_ENV_DEFAULT`).
 
 - [ ] **Step 5: Criterio 2 — i due lati si vedono**
 
@@ -1990,6 +1999,12 @@ chiamato solo quando **entrambe** le copie sono invalide (Step 4). Con una
 sola copia cancellata `env_import_redund()` trova l'altra copia valida, prende
 quella e non alza il flag — nessuna riparazione parte, e questo test resta
 esattamente quello di prima della patch.
+
+Questo vale **perché** `env_blk_load()` azzera `GD_FLG_ENV_DEFAULT` in testa:
+il flag è un latch alzato da `initr_env_nowhere()` prima che qualunque driver
+di environment giri, quindi senza l'azzeramento la riparazione sarebbe partita
+anche qui, e anzi a ogni boot. Se qualcuno togliesse quella riga, questo test
+comincerebbe a fallire in modo confuso.
 
 La prova che la copia ridondante e' stata usata e' quindi un'altra: da U-Boot
 `printenv pluto` deve rispondere ancora `pluto=2`. Se rispondesse il default

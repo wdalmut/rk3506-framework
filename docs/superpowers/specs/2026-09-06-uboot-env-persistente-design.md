@@ -249,7 +249,11 @@ sepolto dentro un file di patch.
 Il rischio di rebase è basso: la serie Rockchip di U-Boot è ferma, e il mirror
 è a SHA fisso.
 
-### D6 — Le due copie nascono cancellate
+> **Emendata il 2026-09-07** da
+> [L'environment vergine si ripara da solo al primo boot](2026-09-07-env-vergine-autoriparazione-design.md).
+> La decisione di non pre-seedare resta; la motivazione originale era sbagliata.
+
+### D6 — Le due copie nascono cancellate, e U-Boot le ripara
 
 Non si pre-seeda l'area con `mkenvimage`. Al primo boot dopo il riflash U-Boot
 stampa `*** Warning - bad CRC, using default environment`, ricade sul default
@@ -258,22 +262,43 @@ hanno CRC non valido, `env_import_redund()` chiama `set_default_env("!bad CRC")`
 (`env/common.c:229-231`), che stampa quella riga (`env/common.c:73-78`). Il
 primo `saveenv` scrive la copia primaria.
 
+**La motivazione originale era sbagliata, ed è stata falsificata su hardware
+il 2026-09-06.** Diceva che lo stato vergine costava solo «un messaggio di
+errore benigno che si vede una volta sola». Il messaggio è benigno; lo stato
+vergine no: un `fw_setenv` lanciato da Linux contro un environment con CRC non
+valido non si limita a rifiutarsi — semina l'intero environment con il default
+compilato dentro `fw_env` stesso, quello di uboot-tools e non quello di questo
+U-Boot, con `bootcmd=bootp; setenv bootargs ...; bootm`. Il boot successivo
+esegue quel `bootcmd` su una scheda senza rete: `bootp` fallisce e `bootm`
+gira a vuoto. Data abort. Una scheda reale si è bloccata così.
+
+**La decisione nuova:** U-Boot ripara l'environment al caricamento, prima che
+lo spazio utente possa vederlo o scriverci sopra — lo stato vergine non arriva
+mai a `fw_setenv`. Il meccanismo è descritto in
+[L'environment vergine si ripara da solo al primo boot](2026-09-07-env-vergine-autoriparazione-design.md).
+
+Il pre-seed resta scartato, ma per motivi nuovi: renderebbe distruttivo ogni
+`rkdeveloptool uf`, non solo il primo dopo un riflash della GPT — e con esso
+i dati per-esemplare che sono la ragione stessa per cui l'environment esiste
+andrebbero preservati e riscritti a ogni aggiornamento — e coprirebbe comunque
+meno casi della riparazione al caricamento, che si applica a qualunque causa
+renda l'environment non valido e non solo al primo boot dopo un riflash.
+
 Il messaggio è **dedotto dal sorgente, non osservato su hardware**. Non è
 `*** Error - No Valid Environment Area found`, come diceva una versione
 precedente di questa spec: `read_env()` (`env/env_blk.c:158-169`) termina con
 `return (n == blk_cnt) ? 0 : -1;`, quindi segnala solo un errore di I/O e mai un
 CRC. Una pagina NAND cancellata si rilegge come `0xFF`, entrambe le letture
 riescono, e il ramo `if (read1_fail && read2_fail)` che stamperebbe quel
-messaggio (`env/env_blk.c:198-206`) non viene preso.
+messaggio (`env/env_blk.c:198-206`) non viene preso. In entrambi i casi il
+messaggio è ora seguito da
+`*** Environment invalid, writing default to flash`: è lo stesso flag,
+`GD_FLG_ENV_DEFAULT`, che innesca sia l'uno sia l'altro percorso.
 
 Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
-invece di `0xFF`, `read_env()` fallirebbe e comparirebbe l'altro messaggio. Lo
-deciderà il primo boot su hardware.
-
-È il comportamento corretto e va **documentato come atteso**, altrimenti al
-primo boot sembra un guasto. Pre-seedare aggiungerebbe un'immagine `env.img` a
-`update.img` e un valore in più da tenere allineato, per evitare un messaggio
-di errore benigno che si vede una volta sola.
+invece di `0xFF`, `read_env()` fallirebbe e comparirebbe l'altro messaggio, ma
+la riparazione scatterebbe comunque, perché anche quel percorso alza
+`GD_FLG_ENV_DEFAULT`. Lo deciderà il primo boot su hardware.
 
 ---
 

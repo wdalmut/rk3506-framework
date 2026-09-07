@@ -1897,11 +1897,37 @@ Interrompi l'autoboot e, dal prompt di U-Boot:
 => reset
 => printenv pippo
 ```
-Expected: `pippo=1`. Al **primo** boot dopo il riflash, prima di questo, U-Boot avra' stampato `*** Warning - bad CRC, using default environment`: e' atteso (D6 della spec). Il messaggio e' dedotto dal sorgente, non osservato su hardware: se comparisse invece `*** Error - No Valid Environment Area found`, significa che il driver SPI-NAND ritorna un errore ECC sulle pagine cancellate invece di `0xFF` — annotalo, non e' un guasto nemmeno quello.
+Expected: `pippo=1`. Al **primo** boot dopo il riflash, prima di questo, U-Boot avrà stampato due righe, non una:
+
+```
+*** Warning - bad CRC, using default environment
+*** Environment invalid, writing default to flash
+```
+
+Entrambe sono attese (D6 della spec): la prima segnala il CRC non valido su entrambe le copie, la seconda è la riparazione che le rende valide scrivendo il default su una delle due. Al **secondo** boot nessuna delle due compare più, perché la copia appena scritta ha un CRC valido. Il messaggio della prima riga è dedotto dal sorgente, non osservato su hardware: se comparisse invece `*** Error - No Valid Environment Area found`, significa che il driver SPI-NAND ritorna un errore ECC sulle pagine cancellate invece di `0xFF` — annotalo, non è un guasto nemmeno quello, e la riga di riparazione compare comunque, perché quel percorso alza lo stesso flag (`GD_FLG_ENV_DEFAULT`).
 
 - [ ] **Step 5: Criterio 2 — i due lati si vedono**
 
-Da Linux:
+Questo è lo step che, su una build senza la patch del Task 1, ha bloccato una
+scheda reale: `fw_setenv` come prima scrittura dopo un riflash, su un
+environment con CRC non valido, non si limita a rifiutarsi — semina l'intero
+environment con il default di uboot-tools (`bootcmd=bootp; ...; bootm`), e il
+boot successivo muore per assenza di rete. Con la patch del Task 1 questo
+passo è sicuro **perché** U-Boot ha già riparato l'environment al primo boot
+(Step 4): quando si arriva qui il CRC è valido, e `fw_setenv` scrive dentro un
+environment corretto invece di sostituirlo.
+
+Prima del test vero, un controllo che vale anche da verifica della
+riparazione:
+```
+# fw_printenv bootcmd
+```
+Expected: il `bootcmd` di Rockchip (`boot_fit;boot_android ...`). Se invece
+esce `bootcmd=bootp; ...`, l'environment è stato seminato da `fw_setenv` e la
+riparazione non ha funzionato: **fermati e riporta, non proseguire con il
+reboot**.
+
+Solo dopo questo controllo, da Linux:
 ```
 # fw_setenv pluto 2
 # reboot
@@ -1935,6 +1961,14 @@ successfully` (`env/env_blk.c:198-206`) non viene preso. Si arriva a
 ridondante e chiama `env_import(ep, 0)` — con il controllo CRC disabilitato,
 e **in completo silenzio** (`env/common.c`).
 
+La riparazione del Task 1 **non** entra in gioco qui, e va detto esplicitamente
+perché con quella patch in albero il test potrebbe sembrare ambiguo:
+`set_default_env()`, che alza `GD_FLG_ENV_DEFAULT` e innesca la riparazione, è
+chiamato solo quando **entrambe** le copie sono invalide (Step 4). Con una
+sola copia cancellata `env_import_redund()` trova l'altra copia valida, prende
+quella e non alza il flag — nessuna riparazione parte, e questo test resta
+esattamente quello di prima della patch.
+
 La prova che la copia ridondante e' stata usata e' quindi un'altra: da U-Boot
 `printenv pluto` deve rispondere ancora `pluto=2`. Se rispondesse il default
 (o niente), la ridondanza non ha funzionato.
@@ -1942,7 +1976,10 @@ La prova che la copia ridondante e' stata usata e' quindi un'altra: da U-Boot
 Come secondo segnale, subito dopo: `saveenv`. Scrivera' nella copia
 **primaria** (`gd->env_valid` e' `ENV_REDUND`, e `env_blk_save()` alterna),
 ripristinando l'alternanza fra le due copie; un `hexdump` di `/dev/mtd2` dopo
-il reboot mostra di nuovo un env valido.
+il reboot mostra di nuovo un env valido. È anche la conseguenza utile di
+questo test: per ripristinare la ridondanza a due copie valide dopo aver
+cancellato una copia per prova, basta questo `saveenv` — scrive la copia
+mancante, non serve nessun altro passo.
 
 Questo e' il test che esercita il rischio 3 della spec: su un chip senza blocchi guasti nell'area env i due percorsi di `get_mtd_blk_map_address()` sono indistinguibili, quindi il caso va provato deliberatamente e non aspettato.
 

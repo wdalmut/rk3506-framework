@@ -828,17 +828,17 @@ sudo rkdeveloptool rd                        # reset
 > nascono cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno
 > CRC non valido, `env_import_redund()` ricade sul default environment (prima
 > riga) e lo scrive subito su una delle due copie (seconda riga) — senza
-> aspettare un `saveenv` esplicito. Al boot successivo nessuna delle due righe
-> compare più, perché la copia appena scritta ha un CRC valido.
+> aspettare un `saveenv` esplicito.
 >
 > U-Boot scrive senza che nessuno gliel'abbia chiesto perché un environment
 > non valido non deve arrivare fino allo spazio utente: è lì che `fw_setenv`
 > lo trasformerebbe in una scheda che non parte (vedi [L'environment
 > U-Boot](#lenvironment-u-boot) più sotto).
 >
-> Entrambe le righe, e l'ordine in cui compaiono, sono **dedotte dal
-> sorgente, non osservate su hardware**: questo environment non ha ancora
-> girato su una board. `read_env()` (`env/env_blk.c:158-169`) chiude con
+> Entrambe le righe, l'ordine in cui compaiono e il fatto che al boot
+> successivo nessuna delle due compaia più sono **dedotti dal sorgente, non
+> osservati su hardware**: questo environment non ha ancora girato su una
+> board. `read_env()` (`env/env_blk.c:158-169`) chiude con
 > `return (n == blk_cnt) ? 0 : -1;`, cioè segnala solo un errore di I/O e mai
 > un CRC; una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe
 > le letture riescono e il ramo che stamperebbe `*** Error - No Valid
@@ -847,7 +847,9 @@ sudo rkdeveloptool rd                        # reset
 > `env/common.c:229-231` chiama `set_default_env("!bad CRC")`, che stampa la
 > prima riga (`env/common.c:73-78`) e alza `GD_FLG_ENV_DEFAULT`; è quel flag
 > che `env_blk_repair()` (`env/env_blk.c`) rileva per scrivere il default in
-> flash e stampare la seconda riga.
+> flash e stampare la seconda riga. Al boot dopo quello, la copia appena
+> scritta ha un CRC valido e nessuno dei due rami dovrebbe più intervenire —
+> ma è la stessa deduzione, non una conferma da banco.
 >
 > Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
 > invece di `0xFF`, `read_env()` fallirebbe davvero e comparirebbe
@@ -856,9 +858,16 @@ sudo rkdeveloptool rd                        # reset
 > flag. È esattamente il genere di cosa che deciderà il primo boot su
 > hardware vero.
 >
-> Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
-> un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,
-> per evitare un messaggio benigno che si vede una volta sola.
+> Non si pre-seeda l'area con `mkenvimage`, e non è per evitare un messaggio
+> benigno — quella era la motivazione originale, falsificata su hardware
+> insieme alla D6 della spec: `default_environment` è un simbolo in
+> `.rodata` dell'ELF di U-Boot, quindi non ci sarebbe nessun valore da tenere
+> allineato a mano. Resta scartato per due motivi diversi: renderebbe
+> distruttivo ogni `rkdeveloptool uf`, sovrascrivendo i dati per-esemplare
+> (MAC address, numero di serie, calibrazioni) che sono la ragione per cui
+> l'environment esiste; e coprirebbe comunque meno casi della riparazione al
+> caricamento, che protegge anche il flash per singola partizione e la
+> corruzione tardiva di entrambe le copie, non solo il riflash completo.
 
 <!-- -->
 
@@ -1042,10 +1051,12 @@ Al boot successivo U-Boot trova entrambe le copie non valide e riscrive il
 default compilato, annunciandolo sulla seriale.
 
 **`update.img` non tocca l'environment**, ed è voluto: il `package-file`
-elenca `parameter`, `bootloader`, `uboot`, `boot` e `rootfs`, quindi un
-riflash lascia intatti MAC address, numero di serie e calibrazioni. Un
-aggiornamento firmware che li cancellasse sarebbe un difetto, non un
-ripristino — per azzerarli serve il gesto esplicito qui sopra.
+elenca sempre `parameter` e `bootloader`, più `uboot`, `boot` e `rootfs`
+quando le rispettive immagini esistono (manca `rootfs`, per esempio, su una
+build initramfs) — `env` ed `env_r` non ci sono mai. Un riflash lascia
+quindi intatti MAC address, numero di serie e calibrazioni: un aggiornamento
+firmware che li cancellasse sarebbe un difetto, non un ripristino — per
+azzerarli serve il gesto esplicito qui sopra.
 
 ---
 

@@ -1757,28 +1757,38 @@ Nella sezione che descrive il primo boot dopo il riflash, aggiungi:
 > nascono cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno
 > CRC non valido, `env_import_redund()` ricade sul default environment (prima
 > riga) e lo scrive subito su una delle due copie (seconda riga), senza
-> aspettare un `saveenv` esplicito. Al boot successivo nessuna delle due righe
-> compare più.
+> aspettare un `saveenv` esplicito.
 >
-> Entrambe le righe sono **dedotte dal sorgente, non osservate su hardware**,
-> e così l'ordine in cui compaiono. `read_env()` (`env/env_blk.c:158-169`)
-> chiude con `return (n == blk_cnt) ? 0 : -1;`: segnala solo errori di I/O,
-> mai un CRC. Una pagina NAND cancellata si rilegge come `0xFF`, quindi
-> entrambe le letture riescono e il ramo che stamperebbe `*** Error - No Valid
+> Entrambe le righe, l'ordine in cui compaiono e il fatto che al boot
+> successivo nessuna delle due compaia più sono **dedotti dal sorgente, non
+> osservati su hardware**. `read_env()` (`env/env_blk.c:158-169`) chiude con
+> `return (n == blk_cnt) ? 0 : -1;`: segnala solo errori di I/O, mai un CRC.
+> Una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe le
+> letture riescono e il ramo che stamperebbe `*** Error - No Valid
 > Environment Area found` (`env/env_blk.c:198-206`) non viene preso; si arriva
 > a `env_import_redund()`, i due CRC falliscono, `set_default_env("!bad CRC")`
 > (`env/common.c:229-231`, :73-78) stampa la prima riga e alza
 > `GD_FLG_ENV_DEFAULT`, che `env_blk_repair()` (`env/env_blk.c`) rileva e usa
-> per stampare la seconda riga scrivendo il default in flash.
+> per stampare la seconda riga scrivendo il default in flash. Al boot dopo
+> quello la copia appena scritta ha un CRC valido e nessuno dei due rami
+> dovrebbe più intervenire — ma è la stessa deduzione, non una conferma da
+> banco.
 >
 > Caveat: con un driver SPI-NAND che ritorna un errore ECC sulle pagine
 > cancellate invece di `0xFF` comparirebbe l'altro messaggio al posto della
 > prima riga, ma la seconda comparirebbe comunque: quel percorso alza lo
 > stesso flag. Lo deciderà il primo boot vero.
 >
-> Non si pre-seeda l'area con `mkenvimage` di proposito: aggiungerebbe
-> un'immagine `env.img` a `update.img` e un valore in più da tenere allineato,
-> per evitare un messaggio benigno che si vede una volta sola.
+> Non si pre-seeda l'area con `mkenvimage`, e non è per evitare un messaggio
+> benigno — quella era la motivazione originale, falsificata su hardware
+> insieme alla D6 della spec: `default_environment` è un simbolo in
+> `.rodata` dell'ELF di U-Boot, quindi non ci sarebbe nessun valore da tenere
+> allineato a mano. Resta scartato per due motivi diversi: renderebbe
+> distruttivo ogni `rkdeveloptool uf`, sovrascrivendo i dati per-esemplare
+> (MAC address, numero di serie, calibrazioni) che sono la ragione per cui
+> l'environment esiste; e coprirebbe comunque meno casi della riparazione al
+> caricamento, che protegge anche il flash per singola partizione e la
+> corruzione tardiva di entrambe le copie, non solo il riflash completo.
 ````
 
 - [ ] **Step 4: `README.md` — il terzo punto di verifica del boot**

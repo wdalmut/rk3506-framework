@@ -1,0 +1,99 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 7/7] env_blk: repair an invalid environment at load time
+
+Un environment non valido in flash non e' uno stato neutro che il primo
+saveenv sistemera': e' una trappola armata per lo spazio utente.
+
+fw_setenv, quando trova un CRC non valido, NON si limita a rifiutare la
+scrittura. Sostituisce l'intero ambiente con il default compilato dentro
+fw_env stesso (tools/env/fw_env.c, ramo "Warning: Bad CRC, using default
+environment") e poi ci applica la modifica richiesta. Quel default e' quello
+di uboot-tools, non quello di questa U-Boot: contiene
+
+    bootcmd=bootp; setenv bootargs root=/dev/nfs ... ; bootm
+
+e nessuno di boot_android, bootrkp, boot_fit. Al boot successivo U-Boot trova
+un CRC valido, si fida, importa, e scaduto il bootdelay esegue bootp su una
+scheda senza rete e poi bootm senza nessuna immagine caricata. Data abort e
+reset in loop. Osservato su hardware il 2026-09-06.
+
+La riparazione va fatta qui, al primo boot, prima che Linux esista e quindi
+prima che qualcuno possa lanciare fw_setenv.
+
+Il rilevatore e' GD_FLG_ENV_DEFAULT, che alza set_default_env(): e' l'unico
+modo in cui l'ambiente in memoria puo' essere il default compilato, e copre
+sia il CRC non valido su entrambe le copie (via env_import_redund) sia
+l'errore di I/O. Il valore di ritorno di env_blk_load() non li distingue,
+perche' nel primo caso env_import_redund() ritorna 0.
+
+Si scrive una copia sola, come farebbe un saveenv manuale. Due chiamate
+consecutive non scriverebbero una copia per parte: env_blk_save() sceglie con
+copy = (gd->env_valid == ENV_VALID) e partendo da uno stato invalido
+riscriverebbe due volte la primaria.
+
+Un salvataggio fallito stampa e prosegue con l'ambiente in RAM: una flash che
+non si lascia scrivere e' un problema piu' grande di questo, e il boot non
+deve morirci sopra.
+
+--- a/env/env_blk.c	2026-09-07 08:28:05.941224192 +0200
++++ b/env/env_blk.c	2026-09-07 08:28:39.654067724 +0200
+@@ -168,6 +168,41 @@
+ 	return (n == blk_cnt) ? 0 : -1;
+ }
+ 
++/*
++ * Un environment non valido non puo' sopravvivere fino allo spazio utente.
++ *
++ * fw_setenv, trovando un CRC non valido, NON si limita a rifiutare: sostituisce
++ * l'intero ambiente con il default compilato dentro fw_env (tools/env/fw_env.c,
++ * ramo "Warning: Bad CRC, using default environment"), che e' quello di
++ * uboot-tools e non contiene nessuno dei comandi di boot Rockchip. Il boot
++ * successivo trova un CRC valido, si fida, ed esegue un bootcmd estraneo.
++ *
++ * Si ripara qui, al primo boot, prima che Linux esista.
++ *
++ * GD_FLG_ENV_DEFAULT lo alza set_default_env(), che e' l'unico modo in cui
++ * l'ambiente in memoria puo' essere il default compilato: sia per CRC non
++ * valido su entrambe le copie (via env_import_redund) sia per errore di I/O.
++ * Il valore di ritorno di env_blk_load() non distingue i due casi.
++ *
++ * Si scrive UNA copia, come farebbe un saveenv manuale: basta a rendere l'env
++ * valido, e la seconda si riempie al salvataggio successivo. Due chiamate
++ * consecutive non scriverebbero una copia per parte, perche' env_blk_save()
++ * alterna in base a gd->env_valid partendo da uno stato invalido.
++ */
++static __maybe_unused void env_blk_repair(void)
++{
++	int ret;
++
++	if (!(gd->flags & GD_FLG_ENV_DEFAULT))
++		return;
++
++	puts("*** Environment invalid, writing default to flash\n");
++
++	ret = env_save();
++	if (ret)
++		printf("*** Error - failed to write environment (%d)\n", ret);
++}
++
+ #ifdef CONFIG_ENV_OFFSET_REDUND
+ static int env_blk_load(void)
+ {
+@@ -230,6 +265,8 @@
+ 	if (ret)
+ 		set_default_env(errmsg);
+ 
++	env_blk_repair();
++
+ #endif
+ 	return ret;
+ }
+@@ -275,6 +312,8 @@
+ err:
+ 	if (ret)
+ 		set_default_env(errmsg);
++
++	env_blk_repair();
+ #endif
+ 	return ret;
+ }

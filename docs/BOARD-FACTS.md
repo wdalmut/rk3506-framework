@@ -150,18 +150,25 @@ modifica richiesta e scriverlo in flash. Un `fw_setenv bootdelay 3` lanciato
 su un environment con CRC non valido non imposta solo `bootdelay`: semina
 tutto il resto con un ambiente estraneo.
 
-Il contenuto di quel default e' verificabile sul target, senza bisogno di
-leggere il sorgente:
+Il contenuto di quel default e' verificabile senza leggere il sorgente, sul
+binario che finisce nel rootfs. Trascrizione integrale, dall'albero di build
+(la stessa cosa vale sul target, con il path `/usr/sbin/fw_printenv`):
 
 ```
-$ strings /usr/sbin/fw_printenv | grep '^bootcmd='
-bootcmd=bootp; setenv bootargs root=/dev/nfs nfsroot=${serverip}:${rootpath} ip=...; bootm
+$ strings output/target/usr/sbin/fw_printenv | grep '^bootcmd='
+bootcmd=bootp; setenv bootargs root=/dev/nfs nfsroot=${serverip}:${rootpath} ip=${ipaddr}:${serverip}:${gatewayip}:${netmask}:${hostname}::off; bootm
 ```
 
-Boot di rete via BOOTP e NFS. Nello stesso binario installato su questa board,
-`boot_android`, `bootrkp` e `boot_fit` — i comandi che avviano davvero questa
-board — compaiono **zero volte**: `strings usr/sbin/fw_printenv | grep -c
-'boot_android\|bootrkp\|boot_fit'` da' `0`.
+La riga e' lunga e non e' abbreviata: e' esattamente quello che il comando
+stampa. Boot di rete via BOOTP e NFS.
+
+Nello stesso binario, `boot_android`, `bootrkp` e `boot_fit` — i comandi che
+avviano davvero questa board — compaiono **zero volte**:
+
+```
+$ strings output/target/usr/sbin/fw_printenv | grep -c 'boot_android\|bootrkp\|boot_fit'
+0
+```
 
 Su questa board la trappola e' disinnescata prima che possa scattare: U-Boot
 ripara un environment non valido al caricamento, prima che Linux esista e

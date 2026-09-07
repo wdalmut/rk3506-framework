@@ -817,27 +817,38 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
-> Al primo boot dopo un riflash U-Boot stampa due righe, non una:
+> Al primo boot dopo un riflash U-Boot stampa **tre** righe, non una:
 >
 > ```
 > *** Warning - bad CRC, using default environment
 > *** Environment invalid, writing default to flash
+> Writing to redundant <NULL>(<NULL>)... done
 > ```
 >
-> **Sono entrambe attese, non un guasto.** Le due partizioni dell'environment
-> nascono cancellate: `env_blk_load()` legge entrambe le copie, entrambe hanno
-> CRC non valido, `env_import_redund()` ricade sul default environment (prima
-> riga) e lo scrive subito su una delle due copie (seconda riga) — senza
-> aspettare un `saveenv` esplicito.
+> **Sono tutte e tre attese, non un guasto.** Le due partizioni
+> dell'environment nascono cancellate: `env_blk_load()` legge entrambe le
+> copie, entrambe hanno CRC non valido, `env_import_redund()` ricade sul
+> default environment (prima riga) e lo scrive subito su una delle due copie
+> (seconda riga) — senza aspettare un `saveenv` esplicito.
+>
+> La terza riga la stampa `env_blk_save()`, che non è silenzioso
+> (`env/env_blk.c:135-136`). I due `<NULL>` sono `devtype` e `devnum`: un
+> istante prima `set_default_env()` ha sostituito l'intera hashtable,
+> portandosi via i valori che `rockchip_get_bootdev()` vi aveva messo, e
+> `boot_devtype_init()` non li rimette perché è già stata chiamata una volta.
+> `lib/vsprintf.c` stampa `<NULL>` per i puntatori nulli: non c'è nessun
+> crash e non c'è niente da correggere. La parola `redundant` dice quale
+> copia è stata scritta — `mtd3`, la ridondante; `mtd2` resta cancellata
+> fino al primo `saveenv` successivo.
 >
 > U-Boot scrive senza che nessuno gliel'abbia chiesto perché un environment
 > non valido non deve arrivare fino allo spazio utente: è lì che `fw_setenv`
 > lo trasformerebbe in una scheda che non parte (vedi [L'environment
 > U-Boot](#lenvironment-u-boot) più sotto).
 >
-> Entrambe le righe, l'ordine in cui compaiono e il fatto che al boot
-> successivo nessuna delle due compaia più sono **dedotti dal sorgente, non
-> osservati su hardware**: questo environment non ha ancora girato su una
+> Le tre righe, l'ordine in cui compaiono e il fatto che al boot successivo
+> nessuna compaia più sono **dedotti dal sorgente, non osservati su
+> hardware**: questo environment non ha ancora girato su una
 > board. `read_env()` (`env/env_blk.c:158-169`) chiude con
 > `return (n == blk_cnt) ? 0 : -1;`, cioè segnala solo un errore di I/O e mai
 > un CRC; una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe
@@ -854,8 +865,8 @@ sudo rkdeveloptool rd                        # reset
 > Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
 > invece di `0xFF`, `read_env()` fallirebbe davvero e comparirebbe
 > `*** Error - No Valid Environment Area found` al posto della prima riga. La
-> seconda comparirebbe comunque, perché anche quel percorso alza lo stesso
-> flag. È esattamente il genere di cosa che deciderà il primo boot su
+> seconda e la terza comparirebbero comunque, perché anche quel percorso alza
+> lo stesso flag. È esattamente il genere di cosa che deciderà il primo boot su
 > hardware vero.
 >
 > Non si pre-seeda l'area con `mkenvimage`, e non è per evitare un messaggio
@@ -1049,6 +1060,14 @@ Il perché di due partizioni invece di un'unica copia, e perché
 
 Al boot successivo U-Boot trova entrambe le copie non valide e riscrive il
 default compilato, annunciandolo sulla seriale.
+
+**Fra i due `flash_erase` e il `reboot` non lanciare `fw_setenv`.** In quella
+finestra l'environment in flash è di nuovo non valido e Linux è ancora vivo:
+è esattamente la condizione in cui `fw_setenv` semina il default di
+uboot-tools e la scheda al boot successivo non parte (vedi
+[L'environment U-Boot](#lenvironment-u-boot)). La riparazione di U-Boot chiude
+quella finestra, ma solo al boot: fino ad allora è aperta. Riavvia, e dopo il
+riavvio `fw_setenv` è di nuovo sicuro.
 
 **`update.img` non tocca l'environment**, ed è voluto: il `package-file`
 elenca sempre `parameter` e `bootloader`, più `uboot`, `boot` e `rootfs`

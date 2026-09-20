@@ -1,18 +1,18 @@
 From: rk3506-framework <walter.dalmut@corley.it>
 Subject: [PATCH 1/1] ARM: dts: rk3506g-luckfox-lyra-plus: ubi.mtd per nome
 
-Il bootargs del DTS attacca UBI a `ubi.mtd=2`, cioe' per indice. Oggi
-quell'indice e' giusto: in parameter.txt la rootfs e' davvero mtd2. Questa non
-e' la correzione di un bug, e' togliere di mezzo un numero che non si aggiorna
-da se'.
+Il bootargs del DTS attacca UBI a `ubi.mtd=2`, cioe' per indice. Con le due
+partizioni dell'environment (env, env_r) inserite nel buco a 20 MiB di
+parameter.txt, mtd2 non e' piu' la rootfs ma la prima copia dell'env: il
+kernel attaccherebbe UBI a 512 KiB di area cancellata e il boot morirebbe sul
+mount della root.
 
 Un indice mtd non e' una proprieta' della partizione: e' la sua posizione
-nell'elenco. Chi inserisce una partizione prima della rootfs - un'area per
-l'environment, un secondo slot per un aggiornamento A/B, qualunque cosa -
-sposta di uno tutte quelle che vengono dopo, e il kernel attacca UBI a
-un'altra area. Non c'e' nessun errore a build time e nessun messaggio al boot:
-c'e' un mount della root che fallisce, oppure - peggio - che riesce su dati
-che non sono quelli.
+nell'elenco. Questa volta a spostarlo siamo stati noi; la prossima volta puo'
+essere chiunque aggiunga una partizione prima della rootfs - un secondo slot
+per un aggiornamento A/B, qualunque cosa - e non c'e' nessun errore a build
+time e nessun messaggio al boot ad avvisare: c'e' un mount della root che
+fallisce, oppure - peggio - che riesce su dati che non sono quelli.
 
 `ubi.mtd=rootfs` attacca per nome: ubi_mtd_param_parse prova prima
 simple_strtoul e, se la stringa non e' un numero, chiama get_mtd_device_nm().

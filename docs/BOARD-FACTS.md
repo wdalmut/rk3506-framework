@@ -72,6 +72,111 @@ che il chip è da **256 MiB**.
 Anche la riga UUID è identica nelle due varianti:
 `uuid:rootfs=614e0000-0000-4b53-8000-1d28000054a9`
 
+### Layout MTD
+
+Fonte unica: `external/board/lyra-plus/parameter.txt`, riga `CMDLINE`.
+Da lì la GPT (`rkdeveloptool`/`afptool`), da lì la lista partizioni di U-Boot
+(`part_efi`), da lì la stringa `mtdparts=` (`drivers/mtd/mtd_blk.c:381`), da lì
+`/proc/mtd`.
+
+Fonte unica non vuol dire copia unica: il layout è **dichiarato in cinque
+posti**. Uno è la fonte, gli altri quattro non possono divergere perché
+qualcosa li genera da lì o li confronta con lì e uccide la build.
+
+| Dove | Cosa dichiara | Come resta allineato |
+|---|---|---|
+| `parameter.txt` | tutto il layout | — è la fonte |
+| `uboot.config`: `CONFIG_ENV_OFFSET`, `CONFIG_ENV_OFFSET_REDUND`, `CONFIG_ENV_SIZE` | solo l'env | **confrontato**: `post-image.sh` blocco 1a legge `include/generated/autoconf.h` (il valore effettivo, non il fragment) e muore se diverge |
+| `linux-mainline.config:199` e `linux-mainline-flash.config:53`: `CONFIG_CMDLINE` | tutto il layout | **confrontato**: `post-image.sh` blocco 2a legge `CONFIG_CMDLINE` dal `.config` generato del kernel, confronta nome/offset/size di ogni partizione nell'ordine di dichiarazione e muore se diverge |
+| `/etc/fw_env.config` | indici e dimensioni di `env`/`env_r` | **generato** da `post-build.sh` |
+| `genimage.cfg` | offset di `uboot`, `boot`, `rootfs` dentro `flash.img` | **generato**: il file committato porta `@OFFSET_<nome>@`, `post-image.sh` (sezione 6) li sostituisce |
+
+I quattro derivati passano tutti da `flash-layout.sh`, che è l'unico parser di
+`parameter.txt` e l'unico posto dove si convertono i settori da 512 B in byte.
+
+Resta **una** trascrizione a mano: `docs/check-artifacts.sh`, sezione 4, cerca i
+magic a 4/8/32 MiB dentro `flash.img` con gli offset scritti nel codice. Non è
+generato di proposito — è un controllo indipendente, e leggerli dalla stessa
+fonte che verifica lo renderebbe circolare — ma va aggiornato a mano se il
+layout cambia.
+
+Perché il blocco 2a serve davvero: sui due defconfig mainline
+`CONFIG_CMDLINE_FORCE=y` fa **ignorare al kernel il bootargs che gli passa
+U-Boot**, quindi sono quelle due stringhe, da sole, a decidere cosa sono
+`/dev/mtd2` e `/dev/mtd3`. `ubi.mtd=rootfs` protegge la root dallo slittamento
+degli indici, ma non protegge `fw_setenv`, che di indici ha bisogno: senza 2a,
+una partizione inserita prima di `env` manderebbe `fw_setenv` a cancellare un
+erase block del volume UBI.
+
+| idx | nome | offset | size | contenuto |
+|---|---|---|---|---|
+| — | *loader/IDB* | 0 | 4 MiB | non dichiarata; `MiniLoaderAll.bin` |
+| `mtd0` | `uboot` | 4 MiB | 4 MiB | `uboot.img` (FIT ×2, 2 MiB ciascuna) |
+| `mtd1` | `boot` | 8 MiB | 12 MiB | `boot.img` (FIT: zImage + fdt + resource) |
+| `mtd2` | `env` | 20 MiB | 512 KiB | environment U-Boot, copia primaria |
+| `mtd3` | `env_r` | 20.5 MiB | 512 KiB | environment U-Boot, copia ridondante |
+| — | *buco* | 21 MiB | 11 MiB | non allocato |
+| `mtd4` | `rootfs` | 32 MiB | `grow` → `0xdf60000` | UBI |
+
+**Gli indici sono slittati** rispetto alle versioni fino alla v0.2.0: `rootfs`
+era `mtd2`. Ogni punto che cablava un indice è stato convertito al nome
+(`ubi.mtd=rootfs`), tranne `/etc/fw_env.config`, che di indici ha bisogno e per
+questo è **generato** da `parameter.txt` invece che scritto a mano.
+
+L'environment occupa un erase block (128 KiB) dentro una partizione di quattro:
+gli altri tre sono riserva per lo skip dei blocchi guasti. Sull'esemplare
+misurato ci sono 2 blocchi guasti su 1792.
+
+### `fw_setenv` su un CRC non valido
+
+Non e' un dettaglio di questa patch: e' un comportamento di `uboot-tools`,
+verificabile su qualunque binario `fw_setenv`/`fw_printenv` a prescindere
+dalla board, e per questo appartiene qui invece che al design del 2026-09-07.
+
+Fonte: `tools/env/fw_env.c`, funzione `fw_env_open()`. Sia nel ramo senza
+ridondanza sia in quello ridondante, quando il CRC letto non torna, il codice
+non si limita a rifiutare l'operazione:
+
+```c
+fprintf (stderr,
+        "Warning: Bad CRC, using default environment\n");
+memcpy(environment.data, default_environment, sizeof default_environment);
+```
+
+Stampa l'avviso e **sostituisce l'intero ambiente in memoria** con
+`default_environment` — il default compilato dentro `fw_env` stesso, quello
+di `uboot-tools`, non quello di questa U-Boot — prima di applicarci la
+modifica richiesta e scriverlo in flash. Un `fw_setenv bootdelay 3` lanciato
+su un environment con CRC non valido non imposta solo `bootdelay`: semina
+tutto il resto con un ambiente estraneo.
+
+Il contenuto di quel default e' verificabile senza leggere il sorgente, sul
+binario che finisce nel rootfs. Trascrizione integrale, dall'albero di build
+(la stessa cosa vale sul target, con il path `/usr/sbin/fw_printenv`):
+
+```
+$ strings output/target/usr/sbin/fw_printenv | grep '^bootcmd='
+bootcmd=bootp; setenv bootargs root=/dev/nfs nfsroot=${serverip}:${rootpath} ip=${ipaddr}:${serverip}:${gatewayip}:${netmask}:${hostname}::off; bootm
+```
+
+La riga e' lunga e non e' abbreviata: e' esattamente quello che il comando
+stampa. Boot di rete via BOOTP e NFS.
+
+Nello stesso binario, `boot_android`, `bootrkp` e `boot_fit` — i comandi che
+avviano davvero questa board — compaiono **zero volte**:
+
+```
+$ strings output/target/usr/sbin/fw_printenv | grep -c 'boot_android\|bootrkp\|boot_fit'
+0
+```
+
+Su questa board la trappola e' disinnescata prima che possa scattare: U-Boot
+ripara un environment non valido al caricamento, prima che Linux esista e
+quindi prima che `fw_setenv` possa vederlo. Il meccanismo e' descritto in
+[docs/superpowers/specs/2026-09-07-env-vergine-autoriparazione-design.md](superpowers/specs/2026-09-07-env-vergine-autoriparazione-design.md).
+Chi lavora su un'altra board Rockchip con lo stesso `fw_setenv` e senza quella
+riparazione trova la trappola intera.
+
 ### UART di debug
 
 Fonte: `$SDK/kernel-6.1/arch/arm/boot/dts/rk3506g-luckfox-lyra-plus.dts` riga 15

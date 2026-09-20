@@ -5,11 +5,15 @@
 #
 # flash-layout.sh — parser unico di parameter.txt.
 #
-# Lo stesso layout MTD e' dichiarato in piu' posti indipendenti: parameter.txt,
-# genimage.cfg e il CONFIG_CMDLINE dei due fragment mainline. Quando divergono
-# non c'e' nessun errore di build: c'e' una board che monta, o cancella, la
-# partizione sbagliata. parameter.txt e' la fonte, e questo e' l'unico parser
-# che la legge.
+# Gli offset delle partizioni compaiono in piu' posti indipendenti:
+# parameter.txt, la configurazione di U-Boot, il CONFIG_CMDLINE dei due
+# fragment mainline, /etc/fw_env.config e genimage.cfg. Se divergono il
+# sintomo e' subdolo (fw_setenv "riesce" e U-Boot legge altro), quindi
+# parameter.txt e' la fonte unica e questo e' l'unico parser che la legge:
+# fw_env.config e gli offset di genimage sono GENERATI da qui (post-build.sh e
+# post-image.sh), U-Boot e il CONFIG_CMDLINE del kernel sono CONFRONTATI con
+# questa fonte da post-image.sh (blocchi 1a e 2a), che uccide la build se
+# divergono.
 #
 # La conversione settori (512 B) -> byte sta QUI e solo qui.
 #
@@ -20,6 +24,10 @@
 #
 # Uso, eseguendolo (stampa la tabella, comodo a mano):
 #     ./flash-layout.sh parameter.txt
+
+# Erase block della SPI NAND. NON e' ricavabile da parameter.txt: e' un fatto
+# della board, misurato. Fonte: docs/BOARD-FACTS.md.
+export LYRA_ERASE_BLOCK=131072
 
 # Unita' della riga CMDLINE di parameter.txt.
 export LYRA_SECTOR=512

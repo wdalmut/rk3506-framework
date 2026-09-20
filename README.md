@@ -131,6 +131,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
 - [Immagini precompilate](#immagini-precompilate)
 - [Flash](#flash)
 - [Console seriale](#console-seriale)
+- [L'environment U-Boot](#lenvironment-u-boot)
 - [Accesso via USB (adb)](#accesso-via-usb-adb)
 - [Output atteso a boot riuscito](#output-atteso-a-boot-riuscito)
 - [Licenza](#licenza)
@@ -816,6 +817,71 @@ sudo rkdeveloptool uf update.img             # scrive tutto
 sudo rkdeveloptool rd                        # reset
 ```
 
+> Al primo boot dopo un riflash U-Boot stampa **tre** righe, non una:
+>
+> ```
+> *** Warning - bad CRC, using default environment
+> *** Environment invalid, writing default to flash
+> Writing to redundant <NULL>(<NULL>)... done
+> ```
+>
+> **Sono tutte e tre attese, non un guasto.** Le due partizioni
+> dell'environment nascono cancellate: `env_blk_load()` legge entrambe le
+> copie, entrambe hanno CRC non valido, `env_import_redund()` ricade sul
+> default environment (prima riga) e lo scrive subito su una delle due copie
+> (seconda riga) — senza aspettare un `saveenv` esplicito.
+>
+> La terza riga la stampa `env_blk_save()`, che non è silenzioso
+> (`env/env_blk.c:135-136`). I due `<NULL>` sono `devtype` e `devnum`: un
+> istante prima `set_default_env()` ha sostituito l'intera hashtable,
+> portandosi via i valori che `rockchip_get_bootdev()` vi aveva messo, e
+> `boot_devtype_init()` non li rimette perché è già stata chiamata una volta.
+> `lib/vsprintf.c` stampa `<NULL>` per i puntatori nulli: non c'è nessun
+> crash e non c'è niente da correggere. La parola `redundant` dice quale
+> copia è stata scritta — `mtd3`, la ridondante; `mtd2` resta cancellata
+> fino al primo `saveenv` successivo.
+>
+> U-Boot scrive senza che nessuno gliel'abbia chiesto perché un environment
+> non valido non deve arrivare fino allo spazio utente: è lì che `fw_setenv`
+> lo trasformerebbe in una scheda che non parte (vedi [L'environment
+> U-Boot](#lenvironment-u-boot) più sotto).
+>
+> Le tre righe, l'ordine in cui compaiono e il fatto che al boot successivo
+> nessuna compaia più sono **dedotti dal sorgente, non osservati su
+> hardware**: questo environment non ha ancora girato su una
+> board. `read_env()` (`env/env_blk.c:158-169`) chiude con
+> `return (n == blk_cnt) ? 0 : -1;`, cioè segnala solo un errore di I/O e mai
+> un CRC; una pagina NAND cancellata si rilegge come `0xFF`, quindi entrambe
+> le letture riescono e il ramo che stamperebbe `*** Error - No Valid
+> Environment Area found` (`env/env_blk.c:198-206`) non viene preso. Si
+> arriva a `env_import_redund()`, entrambi i CRC falliscono,
+> `env/common.c:229-231` chiama `set_default_env("!bad CRC")`, che stampa la
+> prima riga (`env/common.c:73-78`) e alza `GD_FLG_ENV_DEFAULT`; è quel flag
+> che `env_blk_repair()` (`env/env_blk.c`) rileva per scrivere il default in
+> flash e stampare la seconda riga. Al boot dopo quello, la copia appena
+> scritta ha un CRC valido e nessuno dei due rami dovrebbe più intervenire —
+> ma è la stessa deduzione, non una conferma da banco.
+>
+> Caveat: se il driver SPI-NAND ritornasse un errore ECC sulle pagine cancellate
+> invece di `0xFF`, `read_env()` fallirebbe davvero e comparirebbe
+> `*** Error - No Valid Environment Area found` al posto della prima riga. La
+> seconda e la terza comparirebbero comunque, perché anche quel percorso alza
+> lo stesso flag. È esattamente il genere di cosa che deciderà il primo boot su
+> hardware vero.
+>
+> Non si pre-seeda l'area con `mkenvimage`, e non è per evitare un messaggio
+> benigno — quella era la motivazione originale, falsificata su hardware
+> insieme alla D6 della spec: `default_environment` è un simbolo in
+> `.rodata` dell'ELF di U-Boot, quindi non ci sarebbe nessun valore da tenere
+> allineato a mano. Resta scartato per due motivi diversi: renderebbe
+> distruttivo ogni `rkdeveloptool uf`, sovrascrivendo i dati per-esemplare
+> (MAC address, numero di serie, calibrazioni) che sono la ragione per cui
+> l'environment esiste; e coprirebbe comunque meno casi della riparazione al
+> caricamento, che protegge anche il flash per singola partizione e la
+> corruzione tardiva di entrambe le copie, non solo il riflash completo.
+
+<!-- -->
+
 > #### Se UBI non attacca dopo un riflash
 >
 > Sintomo, sui defconfig con rootfs su flash:
@@ -950,6 +1016,69 @@ in bring-up la cmdline non e' fra i sospetti.
 
 ---
 
+## L'environment U-Boot
+
+Persistente e ridondante su due partizioni MTD. Da U-Boot:
+
+```
+=> setenv seriale AB1234
+=> saveenv
+=> reset
+=> printenv seriale
+```
+
+Da Linux, con lo stesso ambiente:
+
+```
+# fw_printenv seriale
+# fw_setenv mac_addr 02:00:00:12:34:56
+```
+
+`/etc/fw_env.config` è **generato** da `parameter.txt` a ogni build: non
+modificarlo a mano, la modifica sparirebbe alla build successiva e nel
+frattempo farebbe scrivere `fw_setenv` nel posto sbagliato.
+
+`fw_setenv` da Linux è sicuro anche come prima scrittura dopo un riflash,
+quando le due copie nascono con CRC non valido: U-Boot ripara un environment
+non valido al caricamento, prima che Linux esista, quindi `fw_setenv` non
+incontra mai un CRC non valido su cui innescarsi — trova sempre un
+environment già valido, il proprio o il default appena scritto dalla
+riparazione. Non è una cautela da ricordare quando si usa `fw_setenv`: è la
+sequenza con cui il sistema arriva alla shell.
+
+Il perché di due partizioni invece di un'unica copia, e perché
+`ENV_IS_IN_BLK_DEV` invece di ENVF, è in
+[docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md).
+
+### Riportare l'environment allo stato di fabbrica
+
+```
+# flash_erase /dev/mtd2 0 0
+# flash_erase /dev/mtd3 0 0
+# reboot
+```
+
+Al boot successivo U-Boot trova entrambe le copie non valide e riscrive il
+default compilato, annunciandolo sulla seriale.
+
+**Fra i due `flash_erase` e il `reboot` non lanciare `fw_setenv`.** In quella
+finestra l'environment in flash è di nuovo non valido e Linux è ancora vivo:
+è esattamente la condizione in cui `fw_setenv` semina il default di
+uboot-tools e la scheda al boot successivo non parte (vedi
+[L'environment U-Boot](#lenvironment-u-boot)). La riparazione di U-Boot chiude
+quella finestra, ma solo al boot: fino ad allora è aperta. Riavvia, e dopo il
+riavvio `fw_setenv` è di nuovo sicuro.
+
+**`update.img` non tocca l'environment**, ed è voluto: il `package-file`
+elenca sempre `parameter` e `bootloader`, più `uboot`, `boot` e `rootfs`
+quando le rispettive immagini esistono (manca `rootfs`, per esempio, su una
+build initramfs) — `env` ed `env_r` non ci sono mai. Un riflash lascia
+quindi intatti MAC address, numero di serie e calibrazioni: un aggiornamento
+firmware che li cancellasse sarebbe un difetto, non un ripristino — per
+azzerarli serve il gesto esplicito qui sopra.
+
+---
+
 ## Accesso via USB (adb)
 
 Oltre alla seriale la board espone un **gadget USB ADB**, cosi' si puo'
@@ -1030,7 +1159,9 @@ Dopo il banner di U-Boot e i messaggi del kernel, `S99hello` esegue
     dev      size         erasesize    name
     mtd0     4 MiB        128 KiB      uboot
     mtd1     12 MiB       128 KiB      boot
-    mtd2     224 MiB      128 KiB      rootfs
+    mtd2     512 KiB      128 KiB      env
+    mtd3     512 KiB      128 KiB      env_r
+    mtd4     223.375 MiB  128 KiB      rootfs
 
 Welcome to Luckfox Lyra Plus (RK3506G2)
 miranda login:
@@ -1046,9 +1177,11 @@ Le righe che valgono davvero come verifica sono tre:
   instabile. Attenzione pero': **87,1 MiB e' il valore normale su questa
   base**, non un sintomo. Mancano i 32 MiB di CMA riservati al display, che
   sono tenuti apposta — vedi [Display e i 32 MiB di CMA](#display-e-i-32-mib-di-cma).
-- **`mtd0/1/2`** — nomi e dimensioni devono combaciare con `parameter.txt`. Se
-  non c'e' nessuna partizione, `mtdparts=` non e' arrivato al kernel: il DTB e'
-  sbagliato o U-Boot ha sovrascritto il bootargs.
+- **`mtd0`…`mtd4`** — nomi e dimensioni devono combaciare con `parameter.txt`.
+  Se non c'è nessuna partizione, `mtdparts=` non è arrivato al kernel: il DTB
+  è sbagliato o U-Boot ha sovrascritto il bootargs. Se ce ne sono tre invece
+  di cinque, l'immagine è stata costruita prima delle partizioni
+  dell'environment e `fw_setenv` scriverebbe dentro la rootfs.
 
 I valori numerici sopra (MemTotal, uptime, data) sono indicativi; quelli
 misurati su questa board — 128 MiB di DDR, NAND da 256 MiB — stanno nella

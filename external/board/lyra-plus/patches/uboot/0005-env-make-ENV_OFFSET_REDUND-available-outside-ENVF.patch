@@ -1,0 +1,42 @@
+From: rk3506-framework <walter.dalmut@corley.it>
+Subject: [PATCH 5/6] env: make ENV_OFFSET_REDUND settable outside ENVF
+
+Su ARCH_ROCKCHIP `config ENV_OFFSET_REDUND` sta dentro il blocco `if ENVF`,
+quindi con qualunque altro backend non e' settabile da un fragment Kconfig:
+merge_config.sh avvisa e va avanti, e l'ambiente resta a copia singola.
+
+Serve per usare ENV_IS_IN_BLK_DEV (env/env_blk.c) con due copie: quel
+backend legge CONFIG_ENV_OFFSET_REDUND in get_env_addr() e alterna le due
+copie in env_blk_save(), ma solo se il simbolo esiste.
+
+Il simbolo esce da `if ENVF` e prende `depends on ENVF || ENV_IS_IN_BLK_DEV`
+invece di restare senza vincoli. Senza il depends on sarebbe visibile a
+tutti i board Rockchip con il suo `default ENV_OFFSET`, e per un board con
+ENV_IS_IN_MMC questo definirebbe CONFIG_ENV_OFFSET_REDUND uguale a
+CONFIG_ENV_OFFSET: include/environment.h:64-68 accenderebbe
+CONFIG_SYS_REDUNDAND_ENVIRONMENT con le due copie allo STESSO offset, cioe'
+una ridondanza finta. Con il depends on la visibilita' per ENVF resta
+identica a oggi.
+
+ENV_NAND_* e ENV_NOR_* restano dentro `if ENVF`: li usa solo ENVF.
+
+--- a/env/Kconfig	2026-09-06 19:43:32.222285008 +0200
++++ b/env/Kconfig	2026-09-06 19:43:42.458029277 +0200
+@@ -523,14 +523,16 @@
+ 	help
+ 	  Size of the environment storage area
+ 
+-if ENVF
+ config ENV_OFFSET_REDUND
+ 	hex "Environment redundant(backup) offset"
++	depends on ENVF || ENV_IS_IN_BLK_DEV
+ 	default ENV_OFFSET
+ 	help
+ 	  Redundant(backup) offset from the start of the device (or partition),
+ 	  this size must be ENV_SIZE.
+ 
++if ENVF
++
+ if CMD_NAND || MTD_SPI_NAND
+ config ENV_NAND_OFFSET
+ 	hex "Environment offset in Nand"

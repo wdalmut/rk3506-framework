@@ -154,6 +154,54 @@ nascosto anche i warning veri).
 
 ---
 
+## L'environment U-Boot persistente: perché è fatto così
+
+L'environment era `CONFIG_ENV_IS_NOWHERE`: viveva in RAM, e `saveenv` non
+persisteva nulla. Ora è persistente e ridondante su due partizioni MTD
+(`env`, `env_r`, 512 KiB ciascuna — vedi [BOARD-FACTS.md](BOARD-FACTS.md#layout-mtd)
+per la tabella del layout). Tre domande, ognuna con la fonte.
+
+### Perché ridondante, e non una copia sola
+
+Un power loss durante `saveenv` non deve lasciare zero copie valide.
+`env_blk_save()` scrive una copia per volta, alternata (`env/env_blk.c:126-148`),
+quindi l'altra resta intatta per tutta la durata della scrittura; in lettura
+`env_import_redund()` confronta i CRC e, se sono validi entrambi, decide in
+base al serial byte gestendo il wrap `255 → 0` (`env/common.c:216-257`). Il
+serial byte lo incrementa `env_export()` (`env/common.c:281-283`) — e
+quell'incremento sta sotto la stessa guardia `CONFIG_SYS_REDUNDAND_ENVIRONMENT`,
+che è ciò che rende l'alternanza significativa.
+
+### Perché `ENV_IS_IN_BLK_DEV`, e non ENVF
+
+Nonostante ENVF sia la strada vendor battuta — 20 defconfig in questo albero
+la usano. `envf_save()` esporta con `H_MATCH_KEY | H_MATCH_IDENT` su una
+whitelist compile-time, `CONFIG_ENVF_LIST` (`env/envf.c:306`,
+`env/Kconfig:457`): `setenv pippo 1; saveenv` non persisterebbe. Allargare la
+lista non risolve — resta chiusa e decisa a compile time, cioè l'opposto di un
+ambiente. Va detto il rischio accettato: **zero defconfig in questo albero
+usano `ENV_IS_IN_BLK_DEV`**, è codice vendor poco battuto, e i criteri di
+accettazione 1-3 lo esercitano end-to-end proprio per questo.
+
+### Perché due partizioni, e non una da 1 MiB con due offset interni
+
+Con una sola partizione U-Boot rimappa i blocchi guasti sull'**intera**
+partizione (`mtd_blk_map_table_init()`, `drivers/mtd/mtd_blk.c:43`, chiamata
+per partizione da `mtd_blk_map_partitions()`), quindi un blocco guasto nella
+prima metà sposterebbe anche la copia di backup; `fw_env`, che salta entro il
+numero di settori della singola copia, no. Divergenza silenziosa: `fw_setenv`
+"riesce" e U-Boot legge altro. Con una partizione per copia le due semantiche
+coincidono per costruzione.
+
+### Perché le patch vanno ai file core di U-Boot, non a `evb_rk3506.h`
+
+Le patch toccano `env/Kconfig` e `include/environment.h`, non
+`include/configs/evb_rk3506.h`: così i tre valori numerici (gli offset delle
+due partizioni e la loro size) restano dentro `uboot.config`, visibili nel
+diff e in un unico posto, invece di essere sepolti dentro un file di patch.
+
+---
+
 ## USB: perche' non usiamo `usbdevice` dell'SDK
 
 

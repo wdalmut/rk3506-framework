@@ -171,7 +171,7 @@ func mtd() {
 	f, err := os.Open("/proc/mtd")
 	if err != nil {
 		fmt.Printf("    non leggibile (%v)\n", err)
-		fmt.Println("    atteso su questa board: mtd0=uboot mtd1=boot mtd2=rootfs")
+		fmt.Println("    atteso su questa board: mtd0=uboot mtd1=boot mtd2=env mtd3=env_r mtd4=rootfs")
 		return
 	}
 	defer f.Close()

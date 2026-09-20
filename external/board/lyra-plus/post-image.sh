@@ -390,6 +390,31 @@ fi
 # mette ogni immagine all'offset esatto dichiarato in parameter.txt.
 if [ "$INITRAMFS" = 0 ] && [ -x "$HOST_DIR/bin/genimage" ]; then
 	msg "flash.img (genimage, layout da parameter.txt)"
+
+	# Gli offset delle partizioni erano un altro posto in cui il layout era
+	# trascritto a mano, e nessuno li confrontava con parameter.txt. Ora non si
+	# trascrivono: il genimage.cfg committato porta i segnaposto @OFFSET_<nome>@
+	# e qui vengono sostituiti con i byte che flash_layout legge da
+	# parameter.txt.
+	GENIMAGE_CFG="$WORK/genimage.cfg"
+	cp -f "$BOARD_DIR/genimage.cfg" "$GENIMAGE_CFG"
+	while IFS=$'\t' read -r _gidx gname goff _gsize; do
+		sed -i "s~@OFFSET_$gname@~$goff~g" "$GENIMAGE_CFG"
+	done <<<"$layout"
+
+	# Un segnaposto rimasto e' una partizione che genimage.cfg cita e
+	# parameter.txt non dichiara (rinominata, o tolta). genimage morirebbe
+	# comunque, ma con un errore di sintassi che non dice perche'.
+	# I commenti si tolgono prima di cercare: il commento in testa a
+	# genimage.cfg cita "@OFFSET_<nome>@" per spiegare il meccanismo, e non e'
+	# un segnaposto da risolvere.
+	unresolved="$(sed 's/#.*//' "$GENIMAGE_CFG" \
+		| grep -o '@OFFSET_[^@]*@' | sort -u | tr '\n' ' ')" || true
+	[ -z "$unresolved" ] || die "genimage.cfg cita partizioni che parameter.txt non dichiara:
+    $unresolved
+    parameter.txt e' la fonte: allinea i nomi in
+    board/lyra-plus/genimage.cfg."
+
 	GENIMAGE_TMP="$BUILD_DIR/genimage.tmp"
 	rm -rf "$GENIMAGE_TMP"
 	mkdir -p "$WORK/empty-root"
@@ -398,7 +423,7 @@ if [ "$INITRAMFS" = 0 ] && [ -x "$HOST_DIR/bin/genimage" ]; then
 		--tmppath "$GENIMAGE_TMP" \
 		--inputpath "$BINARIES_DIR" \
 		--outputpath "$BINARIES_DIR" \
-		--config "$BOARD_DIR/genimage.cfg"
+		--config "$GENIMAGE_CFG"
 fi
 
 # ---------------------------------------------------------------------------

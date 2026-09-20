@@ -38,6 +38,10 @@ cfg() {
 # Radice del repository: BOARD_DIR e' <repo>/external/board/lyra-plus.
 TOPDIR="$(cd "$BOARD_DIR/../../.." && pwd)"
 
+# Parser unico di parameter.txt: LYRA_SECTOR, flash_layout(), flash_part().
+# shellcheck source=flash-layout.sh
+. "$BOARD_DIR/flash-layout.sh"
+
 # I percorsi vendor possono essere assoluti (un checkout altrove) oppure
 # relativi, e in quel caso valgono rispetto alla radice del repository. Il
 # default e' relativo e punta al submodule 'vendor'.
@@ -299,35 +303,39 @@ else
 fi
 
 # Controllo che l'SDK fa in mk-firmware.sh:52-64: ogni immagine deve entrare
-# nella partizione dichiarata in parameter.txt.
+# nella partizione dichiarata in parameter.txt. Le partizioni senza immagine -
+# 'rootfs' nelle varianti initramfs - non hanno niente da controllare e
+# vengono saltate.
 msg "verifica dimensioni contro parameter.txt"
-python3 - "$BINARIES_DIR/parameter.txt" "$BINARIES_DIR" <<'PYEOF'
-import re, sys, os
-param, bindir = sys.argv[1], sys.argv[2]
-line = next(l for l in open(param) if l.startswith('CMDLINE'))
-parts = line.split('mtdparts=', 1)[1].split(':', 1)[1].strip()
-total = None
-rc = 0
-for ent in parts.split(','):
-    m = re.match(r'(-|0x[0-9a-fA-F]+)@(0x[0-9a-fA-F]+)\(([^):]+)', ent)
-    if not m:
-        continue
-    size, off, name = m.group(1), int(m.group(2), 16), m.group(3)
-    img = os.path.join(bindir, name + '.img')
-    if not os.path.exists(img):
-        print(f"    {name:8} (nessuna {name}.img, salto)")
-        continue
-    fsz = os.path.getsize(img)
-    if size == '-':
-        print(f"    {name:8} {fsz/2**20:8.2f} MiB  -> partizione 'grow', nessun limite fisso")
-        continue
-    lim = int(size, 16) * 512
-    ok = 'OK' if fsz <= lim else 'TROPPO GRANDE'
-    print(f"    {name:8} {fsz/2**20:8.2f} MiB / {lim/2**20:8.2f} MiB  {ok}")
-    if fsz > lim:
-        rc = 1
-sys.exit(rc)
-PYEOF
+mib() { awk -v b="$1" 'BEGIN { printf "%8.2f", b / 1048576 }'; }
+
+# flash_layout emette tutto o niente: se una voce di mtdparts non e'
+# riconosciuta non stampa nessuna riga e fallisce. Il suo stato di uscita va
+# raccolto QUI, perche' dentro una process substitution andrebbe perso e una
+# partizione che sparisce dall'elenco non darebbe nessun sintomo.
+layout="$(flash_layout "$BINARIES_DIR/parameter.txt")" \
+	|| die "parameter.txt non parsabile (vedi l'errore qui sopra)"
+
+size_rc=0
+# shellcheck disable=SC2034
+while IFS=$'\t' read -r _idx name off size; do
+	img="$BINARIES_DIR/$name.img"
+	if [ ! -f "$img" ]; then
+		printf '    %-8s (nessuna %s.img, salto)\n' "$name" "$name"
+		continue
+	fi
+	fsz="$(stat -c%s "$img")"
+	if [ "$size" = grow ]; then
+		printf "    %-8s %s MiB  -> partizione 'grow', nessun limite fisso\n" \
+			"$name" "$(mib "$fsz")"
+		continue
+	fi
+	if [ "$fsz" -le "$size" ]; then ok=OK; else ok="TROPPO GRANDE"; size_rc=1; fi
+	printf '    %-8s %s MiB / %s MiB  %s\n' \
+		"$name" "$(mib "$fsz")" "$(mib "$size")" "$ok"
+done <<<"$layout"
+
+[ "$size_rc" = 0 ] || die "una immagine non entra nella sua partizione (vedi sopra)"
 
 # ---------------------------------------------------------------------------
 # 5. update.img

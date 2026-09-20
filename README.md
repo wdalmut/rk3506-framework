@@ -168,6 +168,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     │   ├── uboot.config          fragment U-Boot
     │   ├── boot.its              sorgente FIT di boot.img
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
+    │   ├── flash-layout.sh       parser unico di parameter.txt
     │   ├── rkbin.sha256          hash attesi dei blob vendor
     │   ├── dts/                  DTS custom (variante initramfs)
     │   ├── patches/{linux,uboot}/  patch numerate a kernel e U-Boot
@@ -570,9 +571,14 @@ prima di toccare il layout delle partizioni:
 > cmdline Linux.
 >
 > Il layout è quindi dichiarato **nella nostra cmdline**, con l'`mtd-id` di
-> mainline e in byte. Costo: lo stesso layout è scritto in tre posti
-> (`parameter.txt` e i due fragment) e **nessuno li confronta**. Se cambi
-> `parameter.txt`, cambia anche i due fragment. Le righe di sorgente che
+> mainline e in byte. Costo: lo stesso layout è scritto in tre posti —
+> `parameter.txt` e i due fragment. A tenerli insieme c'è `post-image.sh`, che
+> confronta il `CONFIG_CMDLINE` generato con `parameter.txt` voce per voce —
+> nome, offset e size — e **ferma la build se divergono**. Se cambi
+> `parameter.txt` devi cambiare anche i due fragment: la build te lo dice, ma
+> il numero giusto lo devi mettere tu. L'unica cosa che resta fuori dal
+> confronto è la dimensione della partizione `grow`, che `parameter.txt` non
+> può dichiarare. Le righe di sorgente che
 > inchiodano la diagnosi sono in
 > [docs/SCELTE-DI-PROGETTO.md](docs/SCELTE-DI-PROGETTO.md), sezione *La SPI
 > NAND su mainline, e l'`mtd-id` che nessuno fa combaciare*.

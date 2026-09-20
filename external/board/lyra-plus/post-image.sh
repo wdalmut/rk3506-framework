@@ -203,6 +203,159 @@ install -m 0644 "$UBOOT_DIR/uboot.img" "$BINARIES_DIR/uboot.img"
 LINUX_DIR="$(pkgdir linux BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION)"
 [ -n "$LINUX_DIR" ] || die "directory di build del kernel non trovata sotto $BUILD_DIR"
 
+# ---------------------------------------------------------------------------
+# 2a. Coerenza del layout MTD cablato nella riga di comando del kernel
+# ---------------------------------------------------------------------------
+# Gli ultimi due posti in cui il layout e' ancora dichiarato a mano:
+# linux-mainline.config e linux-mainline-flash.config cablano l'intera stringa
+# mtdparts= dentro CONFIG_CMDLINE, e mettono CONFIG_CMDLINE_FORCE=y. Su
+# lyra_plus_mainline_defconfig e lyra_plus_mainline_initramfs_defconfig il
+# kernel quindi IGNORA il bootargs che gli passa U-Boot: sono quelle due
+# stringhe, da sole, a decidere cosa sono /dev/mtd0, mtd1 e mtd2 — mentre la
+# GPT che il tool di flash scrive viene da parameter.txt. Sono due
+# dichiarazioni dello stesso layout, e finora nessuno le confrontava. Se
+# divergono:
+#
+#   - offset diverso  -> il kernel cerca una partizione dove il tool di flash
+#                        non ha scritto niente;
+#   - numero o ordine diversi -> /dev/mtdN non e' piu' la partizione che la
+#                        GPT chiama con quell'indice, e tutto cio' che va per
+#                        indice punta altrove;
+#   - size diversa    -> per la rootfs e' la trappola dei blocchi in eccesso
+#                        gia' spiegata in linux-mainline.config: UBI cresce in
+#                        blocchi fuori partizione, ci scrive header EC, e al
+#                        riflash successivo il boot muore su "bad image
+#                        sequence number".
+#
+# Nessuno dei tre da' un errore a build time senza questo blocco.
+#
+# Si legge $LINUX_DIR/.config e non i due fragment: il valore generato e'
+# quello che spedisce, e cosi' si intercetta anche un CONFIG_CMDLINE che
+# arrivasse dal defconfig di base o da un altro fragment.
+#
+# Il percorso vendor (lyra_plus_defconfig, lyra_plus_initramfs_defconfig) NON
+# ha mtdparts= in CONFIG_CMDLINE: li' il layout lo passa U-Boot a runtime. Non
+# e' una lacuna, e' il progetto: quel caso si salta in silenzio.
+
+# Converte una dimensione o un offset di mtdparts in byte. La sintassi
+# (esadecimale, decimale, suffissi k/m/g) la valida la regex qui sotto,
+# quindi qui basta la moltiplicazione.
+mtd_bytes() {
+	local v="$1" mul=1
+	case "$v" in
+	*[kK]) mul=1024;       v="${v%?}" ;;
+	*[mM]) mul=1048576;    v="${v%?}" ;;
+	*[gG]) mul=1073741824; v="${v%?}" ;;
+	esac
+	printf '%d' "$(( v * mul ))"
+}
+
+KERNEL_CONFIG="$LINUX_DIR/.config"
+kcmdline=""
+[ -r "$KERNEL_CONFIG" ] &&
+	kcmdline="$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' "$KERNEL_CONFIG" | tail -1)"
+
+if [ ! -r "$KERNEL_CONFIG" ]; then
+	warn ".config del kernel non leggibile, salto la verifica del layout MTD:
+    $KERNEL_CONFIG"
+elif [ "${kcmdline#*mtdparts=}" = "$kcmdline" ]; then
+	# Percorso vendor: nessun mtdparts= cablato, il layout arriva da U-Boot.
+	# Silenzio voluto.
+	:
+else
+	msg "verifica layout MTD: CONFIG_CMDLINE del kernel <-> parameter.txt"
+
+	# Il token mtdparts= finisce al primo spazio (in linux-mainline-flash.config
+	# seguono ubi.mtd=, root=, rootfstype=, rw). Poi si toglie l'mtd-id
+	# ("spi0.0:"), che in parameter.txt e' vuoto e comunque non fa parte del
+	# layout.
+	kparts="${kcmdline#*mtdparts=}"
+	kparts="${kparts%% *}"
+	kparts="${kparts#*:}"
+
+	k_names=(); k_offs=(); k_sizes=(); k_count=0
+	while IFS= read -r ent; do
+		[ -n "$ent" ] || continue
+		if [[ ! "$ent" =~ ^(-|0[xX][0-9a-fA-F]+|[0-9]+)([kKmMgG]?)@(0[xX][0-9a-fA-F]+|[0-9]+)([kKmMgG]?)\(([^\)]+)\) ]]; then
+			die "voce mtdparts non riconosciuta nel CONFIG_CMDLINE del kernel: '$ent'
+    stringa completa: $kparts
+    Atteso <size>@<offset>(<nome>), come in parameter.txt.
+    Sorgente: $KERNEL_CONFIG (fragment: linux-mainline*.config)."
+		fi
+		if [ "${BASH_REMATCH[1]}" = - ]; then
+			k_sizes+=(grow)
+		else
+			k_sizes+=("$(mtd_bytes "${BASH_REMATCH[1]}${BASH_REMATCH[2]}")")
+		fi
+		k_offs+=("$(mtd_bytes "${BASH_REMATCH[3]}${BASH_REMATCH[4]}")")
+		# Il nome puo' portare un suffisso ":flag", come "rootfs:grow" in
+		# parameter.txt: flash_layout lo toglie, qui si fa lo stesso.
+		k_names+=("${BASH_REMATCH[5]%%:*}")
+		k_count=$(( k_count + 1 ))
+	done <<<"${kparts//,/$'\n'}"
+
+	# Come nel blocco delle dimensioni: flash_layout emette tutto o niente, e
+	# dentro una process substitution il suo stato di uscita andrebbe perso. Si
+	# raccoglie qui.
+	klayout="$(flash_layout "$BOARD_DIR/parameter.txt")" \
+		|| die "parameter.txt non parsabile (vedi l'errore qui sopra)"
+
+	p_names=(); p_offs=(); p_sizes=(); p_count=0
+	while IFS=$'\t' read -r _pidx pname poff psize; do
+		p_names+=("$pname"); p_offs+=("$poff"); p_sizes+=("$psize")
+		p_count=$(( p_count + 1 ))
+	done <<<"$klayout"
+
+	# Il numero di partizioni e' esso stesso un confronto: una voce in piu' o in
+	# meno slitta l'indice mtd di tutte quelle che vengono dopo, e da quel punto
+	# i due elenchi parlano di partizioni diverse con lo stesso nome di device.
+	[ "$k_count" = "$p_count" ] || die "il numero di partizioni MTD non coincide:
+    CONFIG_CMDLINE  $k_count partizioni: ${k_names[*]}
+    parameter.txt   $p_count partizioni: ${p_names[*]}
+    parameter.txt e' la fonte: allinea la riga CONFIG_CMDLINE di
+    board/lyra-plus/linux-mainline.config e linux-mainline-flash.config."
+
+	kidx=0
+	kgrow=""
+	while [ "$kidx" -lt "$p_count" ]; do
+		[ "${k_names[$kidx]}" = "${p_names[$kidx]}" ] \
+			|| die "mtd$kidx ha nomi diversi nei due posti:
+    CONFIG_CMDLINE  mtd$kidx = '${k_names[$kidx]}'
+    parameter.txt   mtd$kidx = '${p_names[$kidx]}'
+    parameter.txt e' la fonte: allinea CONFIG_CMDLINE in
+    board/lyra-plus/linux-mainline.config e linux-mainline-flash.config."
+
+		[ "${k_offs[$kidx]}" = "${p_offs[$kidx]}" ] \
+			|| die "l'offset di '${p_names[$kidx]}' (mtd$kidx) diverge:
+    CONFIG_CMDLINE  ${k_offs[$kidx]}
+    parameter.txt   ${p_offs[$kidx]}
+    differenza      $(( k_offs[kidx] - p_offs[kidx] )) byte
+    parameter.txt e' la fonte: allinea CONFIG_CMDLINE in
+    board/lyra-plus/linux-mainline.config e linux-mainline-flash.config."
+
+		# Unica eccezione: la partizione 'grow'. parameter.txt non ne puo'
+		# dichiarare la dimensione (la calcola U-Boot a runtime, da dove cade
+		# la GPT di backup), mentre la riga del kernel deve scrivere un numero
+		# concreto. Di lei si confrontano nome e offset, non la dimensione.
+		if [ "${p_sizes[$kidx]}" = grow ]; then
+			kgrow="${p_names[$kidx]}"
+		else
+			[ "${k_sizes[$kidx]}" = "${p_sizes[$kidx]}" ] \
+				|| die "la dimensione di '${p_names[$kidx]}' (mtd$kidx) diverge:
+    CONFIG_CMDLINE  ${k_sizes[$kidx]}
+    parameter.txt   ${p_sizes[$kidx]}
+    parameter.txt e' la fonte: allinea CONFIG_CMDLINE in
+    board/lyra-plus/linux-mainline.config e linux-mainline-flash.config."
+		fi
+		kidx=$(( kidx + 1 ))
+	done
+
+	printf '    %s partizioni, nome/offset/size concordi: %s\n' \
+		"$p_count" "${p_names[*]}"
+	[ -z "$kgrow" ] || printf \
+		"    ('%s' e' grow: si confrontano nome e offset, non la size)\n" "$kgrow"
+fi
+
 # resource_tool: due provenienze, in quest'ordine.
 #
 #  1. $LINUX_DIR/scripts/resource_tool — il kernel VENDOR 6.1 lo compila da

@@ -397,6 +397,29 @@ fi
 DTB="$LINUX_DIR/arch/arm/boot/dts/${DTB_NAME}.dtb"
 [ -f "$DTB" ] || die "DTB non trovato: $DTB"
 
+# La patch che porta ubi.mtd=2 -> ubi.mtd=rootfs nel DTS vendor e' agganciata
+# alla sottodirectory di versione patches/linux/<SHA>/. E' il prezzo di non
+# romperla sui due percorsi mainline, che hanno il DTS altrove — ma significa
+# che alzando lo SHA del kernel la patch smette di applicarsi SENZA UN
+# MESSAGGIO, e il DTB torna ad attaccare UBI per indice.
+#
+# Il DTB e' gia' in mano allo script: si controlla li'. Sui DTB mainline e
+# sulla variante initramfs vendor il nodo chosen non ha nessun ubi.mtd,
+# quindi il controllo e' un no-op.
+if strings "$DTB" | grep -qE 'ubi\.mtd=[0-9]'; then
+	die "il DTB $DTB_NAME.dtb attacca UBI per INDICE:
+        $(strings "$DTB" | grep -oE 'ubi\.mtd=[0-9]+' | head -1)
+    Un DTB di questa board non deve attaccare UBI per indice, nemmeno quando
+    l'indice e' quello giusto: un indice mtd e' la posizione nell'elenco, non
+    una proprieta' della partizione, e il primo che ne inserisce una prima
+    della rootfs manda UBI su un'altra area senza nessun messaggio. Si attacca
+    per nome: ubi.mtd=rootfs.
+    Quasi sempre significa che la patch al DTS vendor non si e' applicata
+    perche' BR2_LINUX_KERNEL_CUSTOM_REPO_VERSION e' cambiato e la
+    sottodirectory external/board/lyra-plus/patches/linux/<SHA>/ non
+    corrisponde piu'. Rinominala con il nuovo SHA."
+fi
+
 WORK="$BUILD_DIR/lyra-plus-image"
 rm -rf "$WORK"; mkdir -p "$WORK"
 

@@ -62,7 +62,7 @@ jobs:
       - name: sintassi degli script
         run: |
           set -euo pipefail
-          for f in setup.sh docs/*.sh external/board/*/post-*.sh; do
+          for f in setup.sh docs/*.sh external/board/*/*.sh; do
             bash -n "$f" && echo "ok  $f"
           done
           # gli init script devono essere POSIX sh: li esegue BusyBox ash
@@ -72,13 +72,13 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
-          shellcheck -S warning setup.sh docs/*.sh external/board/*/post-*.sh || true
+          shellcheck -S warning setup.sh docs/*.sh external/board/*/*.sh || true
       - name: gli script sono eseguibili
         # Se S99hello perde il bit +x l'applicazione non parte al boot, e
         # sembra un problema del porting.
         run: |
           set -euo pipefail
-          for f in setup.sh docs/*.sh external/board/*/post-*.sh \
+          for f in setup.sh docs/*.sh external/board/*/*.sh \
                    external/board/*/rootfs_overlay/etc/init.d/S*; do
             [ -x "$f" ] || { echo "::error::$f non e' eseguibile"; exit 1; }
           done

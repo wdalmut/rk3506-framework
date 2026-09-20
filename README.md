@@ -168,6 +168,7 @@ mano dopo aver alzato uno SHA o toccato `post-image.sh`.
     │   ├── uboot.config          fragment U-Boot
     │   ├── boot.its              sorgente FIT di boot.img
     │   ├── parameter.txt         tabella partizioni MTD (baseline vendor)
+    │   ├── flash-layout.sh       parser unico di parameter.txt
     │   ├── rkbin.sha256          hash attesi dei blob vendor
     │   ├── dts/                  DTS custom (variante initramfs)
     │   ├── patches/{linux,uboot}/  patch numerate a kernel e U-Boot
